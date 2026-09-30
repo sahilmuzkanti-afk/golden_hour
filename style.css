@@ -182,3 +182,128 @@
     justify-content: center;
     gap: 0;
     background: radial-gradient(120% 90% at 50% 46%, #1a1f2b 0%, #0a0c12 55%, #06070a 100%);
+    color: #fff;
+    transition: opacity 1.25s cubic-bezier(.4, 0, .2, 1);
+  }
+
+  #start.hide {
+    opacity: 0;
+    pointer-events: none
+  }
+
+  #title {
+    font-size: clamp(46px, 10.5vw, 148px);
+    font-weight: 200;
+    letter-spacing: .13em;
+    line-height: .96;
+    text-transform: uppercase;
+    background: linear-gradient(178deg, #fff 8%, #ffcf9a 52%, #ff8a45 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  #sub {
+    margin-top: 20px;
+    font-size: clamp(10px, 1.15vw, 13px);
+    font-weight: 400;
+    letter-spacing: .52em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .35);
+    text-indent: .52em;
+  }
+
+  #keys {
+    margin-top: clamp(38px, 6.4vh, 68px);
+    display: flex;
+    gap: clamp(16px, 2.6vw, 34px);
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: min(90vw, 700px);
+  }
+
+  .k {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: rgba(255, 255, 255, .5);
+    font-size: 12px;
+    letter-spacing: .13em;
+    text-transform: uppercase
+  }
+
+  .k b {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, .17);
+    background: rgba(255, 255, 255, .05);
+    color: rgba(255, 255, 255, .86);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: .08em;
+  }
+
+  #go {
+    margin-top: clamp(34px, 5.6vh, 58px);
+    font-size: 11px;
+    letter-spacing: .42em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .75);
+    text-indent: .42em;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+
+    0%,
+    100% {
+      opacity: .32
+    }
+
+    50% {
+      opacity: 1
+    }
+  }
+
+  #loadBar {
+    position: absolute;
+    left: 50%;
+    bottom: 52px;
+    transform: translateX(-50%);
+    width: 180px;
+    height: 1px;
+    background: rgba(255, 255, 255, .1);
+    overflow: hidden
+  }
+
+  #loadFill {
+    height: 100%;
+    width: 0%;
+    background: rgba(255, 255, 255, .55);
+    transition: width .45s ease
+  }
+
+
+  #flash {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none
+  }
+
+  @media (max-width:620px) {
+    #keys {
+      display: none
+    }
+
+    #todWrap {
+      display: none
+    }
+  }
