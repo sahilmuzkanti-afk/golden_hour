@@ -126,3 +126,157 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.4, 16
 camera.position.set(0, 6, -12);
 
 
+
+
+
+
+
+
+
+
+const skyRT = new THREE.WebGLCubeRenderTarget(128, {
+  type: THREE.HalfFloatType
+});
+skyRT.texture.minFilter = THREE.LinearMipmapLinearFilter;
+skyRT.texture.generateMipmaps = true;
+const skyCam = new THREE.CubeCamera(1, 40000, skyRT);
+
+
+
+const SKYFOG_U = {
+  value: skyRT.texture
+};
+THREE.Material.prototype.onBeforeCompile = function(shader) {
+  shader.uniforms.fogSky = SKYFOG_U;
+};
+
+function fogPatch(fn) {
+  return function(shader, r) {
+    shader.uniforms.fogSky = SKYFOG_U;
+    fn.call(this, shader, r);
+  };
+}
+THREE.ShaderChunk.fog_pars_vertex = `
+#ifdef USE_FOG
+  varying float vFogDepth;
+  varying vec3  vFogView;
+#endif`;
+THREE.ShaderChunk.fog_vertex = `
+#ifdef USE_FOG
+  vFogDepth = - mvPosition.z;
+  vFogView  = mvPosition.xyz;
+#endif`;
+THREE.ShaderChunk.fog_pars_fragment = `
+#ifdef USE_FOG
+  uniform vec3  fogColor;
+  uniform samplerCube fogSky;
+  varying float vFogDepth;
+  varying vec3  vFogView;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear;
+    uniform float fogFar;
+  #endif
+#endif`;
+THREE.ShaderChunk.fog_fragment = `
+#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+  #else
+    float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+  #endif
+  
+  vec3 fdir = normalize( vFogView * mat3( viewMatrix ) );
+  fdir.y = max( fdir.y, -0.03 );        
+  vec3 fcol = mix( fogColor, textureCube( fogSky, normalize(fdir) ).rgb, 0.86 );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fcol, fogFactor );
+#endif`;
+
+
+
+
+const PH = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k';
+const texLoader = new THREE.TextureLoader();
+texLoader.setCrossOrigin('anonymous');
+
+let pendingTex = 0,
+  doneTex = 0;
+const loadFill = document.getElementById('loadFill');
+
+function texProgress() {
+  if (!pendingTex) return;
+  loadFill.style.width = Math.round(100 * doneTex / pendingTex) + '%';
+}
+
+
+function streamMap(slug, kind, colorSpace, apply) {
+  pendingTex++;
+  texLoader.load(`${PH}/${slug}/${slug}_${kind}_1k.jpg`,
+    t => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = MAXANISO;
+      if (colorSpace) t.colorSpace = colorSpace;
+      apply(t);
+      doneTex++;
+      texProgress();
+    },
+    undefined,
+    () => {
+      doneTex++;
+      texProgress();
+    }
+  );
+}
+
+function canvasTex(w, h, draw, {
+  srgb = true,
+  repeat = true,
+  aniso = true
+} = {}) {
+  const cv = document.createElement('canvas');
+  cv.width = w;
+  cv.height = h;
+  draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv);
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  if (aniso) t.anisotropy = MAXANISO;
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  return t;
+}
+
+
+const asphaltFallback = canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = '#2b2b2e';
+  g.fillRect(0, 0, w, h);
+  const img = g.getImageData(0, 0, w, h),
+    d = img.data;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const n = (hashI(x * 3 + 1, y * 3 + 7) + hashI(x * 7, y * 5) * 0.6) / 1.6;
+      const v = 30 + n * 36;
+      d[i] = v;
+      d[i + 1] = v + 1;
+      d[i + 2] = v + 3;
+    }
+  g.putImageData(img, 0, 0);
+});
+
+
+const ROAD_HALF = 4.6;
+const MARK_TILE = 16;
+const markingsTex = canvasTex(1024, 2048, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      const pxPerM_x = w / (ROAD_HALF * 2);
+      const pxPerM_y = h / MARK_TILE;
+      const cx = w / 2;
+
+
+      for (const off of [-1.75, 1.75]) {
+        const x = cx + off * pxPerM_x,
+          wdt = 0.95 * pxPerM_x;
+        const grd = g.createLinearGradient(x - wdt, 0, x + wdt, 0);
+        grd.addColorStop(0, 'rgba(10,10,12,0)');
+        grd.addColorStop(.5, 'rgba(10,10,12,.30)');
+        grd.addColorStop(1, 'rgba(10,10,12,0)');
