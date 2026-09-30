@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>GOLDEN HOUR — an endless drive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div id="distWrap">
+      <div id="dist">0.00</div>
+      <div id="distLabel">km</div>
+    </div>
+    <div id="speedWrap">
+      <div id="speed">0</div>
+      <div id="speedUnit">km/h</div>
+    </div>
+    <div id="boostTrack">
+      <div id="boostFill"></div>
+    </div>
+    <div id="todWrap">
+      <div id="tod">Golden Hour</div>
+      <div id="todLabel">light</div>
+    </div>
+    <div id="camTag">CHASE</div>
+  </div>
+
+  <div id="flash"></div>
+
+  <div id="start">
+    <div id="title">Golden&nbsp;Hour</div>
+    <div id="sub">an endless drive</div>
+    <div id="keys">
+      <div class="k"><b>W</b><b>S</b> throttle</div>
+      <div class="k"><b>A</b><b>D</b> steer</div>
+      <div class="k"><b>Shift</b> boost</div>
+      <div class="k"><b>Space</b> drift</div>
+      <div class="k"><b>C</b> camera</div>
+      <div class="k"><b>V</b> fps cap</div>
+      <div class="k"><b>R</b> restart</div>
+    </div>
+    <div id="go">Press any key to drive</div>
+    <div id="loadBar">
+      <div id="loadFill"></div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+  <script type="text/plain" src="script.js"></script>
+</body>
+
+</html>
