@@ -1,0 +1,184 @@
+  :root {
+    --ink: rgba(255, 255, 255, .94);
+    --dim: rgba(255, 255, 255, .42);
+    --fnt: 'Barlow Condensed', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #07090d;
+  }
+
+  body {
+    font-family: var(--fnt);
+    -webkit-font-smoothing: antialiased;
+    cursor: default
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    inset: 0
+  }
+
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 1.1s ease .25s;
+    text-shadow: 0 1px 14px rgba(0, 0, 0, .55);
+  }
+
+  #hud.on {
+    opacity: 1
+  }
+
+
+  #speedWrap {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(20px, 4.4vh, 46px);
+    transform: translateX(-50%);
+    display: flex;
+    align-items: baseline;
+    gap: .42em;
+    color: var(--ink);
+  }
+
+  #speed {
+    font-size: clamp(52px, 7.4vw, 104px);
+    font-weight: 300;
+    line-height: .82;
+    letter-spacing: -.028em;
+    font-variant-numeric: tabular-nums;
+    min-width: 2.6em;
+    text-align: right;
+  }
+
+  #speedUnit {
+    font-size: clamp(11px, 1.15vw, 15px);
+    font-weight: 500;
+    letter-spacing: .34em;
+    color: var(--dim);
+    text-transform: uppercase;
+    padding-bottom: .55em;
+  }
+
+
+  #boostTrack {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(11px, 2.1vh, 25px);
+    transform: translateX(-50%);
+    width: clamp(148px, 17vw, 236px);
+    height: 2px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, .13);
+    overflow: hidden;
+  }
+
+  #boostFill {
+    height: 100%;
+    width: 100%;
+    transform-origin: left center;
+    background: linear-gradient(90deg, #ff8a3d, #ffd479);
+    box-shadow: 0 0 10px rgba(255, 150, 60, .75);
+    transition: opacity .25s ease;
+  }
+
+
+  #distWrap {
+    position: absolute;
+    left: clamp(20px, 3.2vw, 50px);
+    bottom: clamp(22px, 4.6vh, 48px);
+    color: var(--ink);
+  }
+
+  #dist {
+    font-size: clamp(20px, 2.2vw, 30px);
+    font-weight: 400;
+    letter-spacing: .008em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1
+  }
+
+  #distLabel {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .3em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-top: 6px
+  }
+
+
+  #todWrap {
+    position: absolute;
+    right: clamp(20px, 3.2vw, 50px);
+    bottom: clamp(22px, 4.6vh, 48px);
+    text-align: right;
+    color: var(--ink);
+  }
+
+  #tod {
+    font-size: clamp(15px, 1.55vw, 21px);
+    font-weight: 400;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    line-height: 1
+  }
+
+  #todLabel {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .3em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-top: 7px
+  }
+
+
+  #camTag {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: clamp(20px, 4vh, 44px);
+    color: var(--ink);
+    opacity: 0;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .42em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 14px rgba(0, 0, 0, .55);
+    transition: opacity .5s ease;
+  }
+
+  #camTag.show {
+    opacity: .85;
+    transition: opacity .12s ease
+  }
+
+
+  #start {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    background: radial-gradient(120% 90% at 50% 46%, #1a1f2b 0%, #0a0c12 55%, #06070a 100%);
