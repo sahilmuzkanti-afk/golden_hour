@@ -611,3 +611,173 @@ function nearestRoad(x, z, maxD) {
   _q.s = path.s[bi];
   return _q;
 }
+
+function corridorDist(x, z) {
+  const c = path.coarse;
+  if (!c.length) return 9999;
+  let best = 1e18;
+  for (let i = 0; i < c.length; i++) {
+    const dx = c[i].x - x,
+      dz = c[i].z - z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < best) best = d2;
+  }
+  return Math.sqrt(best);
+}
+
+
+
+
+const CARVE_IN = 7.0,
+  CARVE_OUT = RD.apron;
+
+function naturalHeight(x, z, corr) {
+
+  const detail = fbm(x * 0.0052, z * 0.0052, 4) * 8.2 +
+    fbm(x * 0.0161, z * 0.0161, 3) * 2.3 +
+    fbm(x * 0.0480, z * 0.0480, 2) * 0.62;
+
+
+
+  const openness = fbm(x * 0.00105, z * 0.00105, 3) * 0.5 + 0.5;
+  const wallAmp = 16 + 62 * (1 - openness) * (1 - openness);
+  const wall = smooth(21, 175 + openness * 260, corr) * wallAmp;
+  const wallRock = smooth(30, 150, corr) * ridged(x * 0.0072, z * 0.0072, 3) * 13 * (1 - openness);
+
+
+  const mask = smooth(190, 1050, corr);
+  const mtn = (ridged(x * 0.00040, z * 0.00040, 5) - 0.28) * 1150 * mask * mask;
+  const big = fbm(x * 0.00092, z * 0.00092, 3) * 175 * mask;
+
+  return detail * (0.85 + 1.05 * mask) + wall + wallRock + mtn + big;
+}
+
+function terrainHeight(x, z, corr) {
+  const c = (corr === undefined) ? corridorDist(x, z) : corr;
+  let h = naturalHeight(x, z, c);
+  if (c < CARVE_OUT + 40) {
+    const q = nearestRoad(x, z, CARVE_OUT + 30);
+    if (q.d < CARVE_OUT) {
+      const w = 1 - smooth(CARVE_IN, CARVE_OUT, q.d);
+
+
+
+
+      const ditch = -0.42 * Math.exp(-Math.pow((q.d - 12.0) / 4.2, 2));
+      h = lerp(h, q.y + ditch - 0.30, w);
+    }
+  }
+  return h;
+}
+
+
+
+
+
+const roadMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 0.86,
+  metalness: 0.0,
+  map: asphaltFallback,
+  envMapIntensity: 0.34,
+});
+roadMat.map.repeat.set((RD.half * 2) / 3.2, MARK_TILE / 3.2);
+roadMat.onBeforeCompile = fogPatch(sh => {
+  sh.uniforms.uMark = {
+    value: markingsTex
+  };
+  sh.uniforms.uWet = {
+    value: 0.0
+  };
+  roadMat.userData.sh = sh;
+  sh.vertexShader = 'varying vec2 vRUv;\n' + sh.vertexShader.replace(
+    '#include <uv_vertex>', '#include <uv_vertex>\n vRUv = uv;');
+  sh.fragmentShader = 'uniform sampler2D uMark;\nuniform float uWet;\nvarying vec2 vRUv;\nfloat _mk;\n' +
+    sh.fragmentShader
+    .replace('#include <map_fragment>', `#include <map_fragment>
+      vec4 mk = texture2D(uMark, vRUv);
+      _mk = mk.a;
+      
+      diffuseColor.rgb *= mix(1.0, 0.62, mk.a * (1.0 - dot(mk.rgb, vec3(0.4))));
+      diffuseColor.rgb = mix(diffuseColor.rgb, mk.rgb * 0.92, mk.a * smoothstep(0.35,0.7,dot(mk.rgb,vec3(0.34))));
+    `)
+    .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      roughnessFactor = mix(roughnessFactor, 0.52, _mk*0.7);
+      roughnessFactor = mix(roughnessFactor, 0.12, uWet);
+    `);
+});
+roadMat.customProgramCacheKey = () => 'road-mark';
+streamMap('asphalt_02', 'diff', THREE.SRGBColorSpace, t => {
+  t.repeat.copy(roadMat.map.repeat);
+  roadMat.map = t;
+  roadMat.needsUpdate = true;
+});
+streamMap('asphalt_02', 'nor_gl', null, t => {
+  t.repeat.copy(roadMat.map.repeat);
+  roadMat.normalMap = t;
+  roadMat.normalScale.set(0.85, 0.85);
+  roadMat.needsUpdate = true;
+});
+streamMap('asphalt_02', 'rough', null, t => {
+  t.repeat.copy(roadMat.map.repeat);
+  roadMat.roughnessMap = t;
+  roadMat.needsUpdate = true;
+});
+
+
+const vergeMat = new THREE.MeshStandardMaterial({
+  color: 0xa89880,
+  roughness: 0.98,
+  metalness: 0,
+  map: rockFallback,
+  envMapIntensity: 0.4
+});
+vergeMat.map.repeat.set(3, 3);
+streamMap('coast_sand_rocks_02', 'diff', THREE.SRGBColorSpace, t => {
+  t.repeat.set(1.6, 1.6);
+  vergeMat.map = t;
+  vergeMat.color.setHex(0xffffff);
+  vergeMat.needsUpdate = true;
+});
+streamMap('coast_sand_rocks_02', 'nor_gl', null, t => {
+  t.repeat.set(1.6, 1.6);
+  vergeMat.normalMap = t;
+  vergeMat.needsUpdate = true;
+});
+
+
+function makeTerrainMat() {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.97,
+    metalness: 0.0,
+    map: grassFallback,
+    envMapIntensity: 0.30,
+    dithering: true
+  });
+  m.map.repeat.set(1, 1);
+  m.onBeforeCompile = fogPatch(sh => {
+        sh.uniforms.tRock = {
+          value: TER.rockMap
+        };
+        sh.uniforms.uSnow = {
+          value: new THREE.Color(0xd9e2ee)
+        };
+        sh.uniforms.uGrass = {
+          value: new THREE.Color(0xffffff)
+        };
+        m.userData.sh = sh;
+        sh.vertexShader = 'attribute float aRock;\nattribute float aSnow;\nvarying float vRock;\nvarying float vSnow;\nvarying vec2 vWXZ;\n' +
+          sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        vRock = aRock; vSnow = aSnow;
+        vWXZ = (modelMatrix * vec4(transformed,1.0)).xz;`);
+        sh.fragmentShader = 'uniform sampler2D tRock;\nuniform vec3 uSnow;\nuniform vec3 uGrass;\nvarying float vRock;\nvarying float vSnow;\nvarying vec2 vWXZ;\n' +
+          sh.fragmentShader
+          .replace('#include <map_fragment>', `
+        vec3 cg = texture2D(map, vWXZ * 0.052).rgb * uGrass;
+        vec3 cg2= texture2D(map, vWXZ * 0.0121).rgb;
+        cg = cg * (0.55 + 0.9*cg2);                       
+        vec3 cr = texture2D(tRock, vWXZ * 0.021).rgb;
+        vec3 base = mix(cg, cr*1.05, vRock);
+        
+        
