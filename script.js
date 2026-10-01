@@ -431,3 +431,183 @@ const path = {
 };
 
 function pathReset() {
+  path.s.length = path.x.length = path.z.length = path.y.length = 0;
+  path.h.length = path.k.length = path.b.length = 0;
+  path.coarse.length = 0;
+  let s = -RD.behind - 60,
+    hh = 0;
+
+
+  let x = 0,
+    z = 0;
+  s = -RD.behind - 60;
+  hh = 0;
+  x = 0;
+  z = 0;
+
+  const n0 = Math.round((0 - s) / RD.step);
+  for (let i = 0; i <= n0; i++) {
+    const ss = s + i * RD.step;
+    pushSample(ss, x, z, hh);
+    const k = curvatureAt(ss);
+    hh += k * RD.step;
+    x += Math.sin(hh) * RD.step;
+    z += Math.cos(hh) * RD.step;
+  }
+  path.headS = path.s[path.s.length - 1];
+  path.headX = x;
+  path.headZ = z;
+  path.headH = hh;
+}
+
+function pushSample(ss, x, z, hh) {
+  const k = curvatureAt(ss);
+  path.s.push(ss);
+  path.x.push(x);
+  path.z.push(z);
+  path.y.push(elevAt(ss));
+  path.h.push(hh);
+  path.k.push(k);
+  path.b.push(bankAt(k));
+  if (path.coarse.length === 0 || ss - path.coarse[path.coarse.length - 1].s >= 60) {
+    path.coarse.push({
+      s: ss,
+      x: x,
+      z: z
+    });
+  }
+}
+
+function pathExtendTo(sTarget) {
+  while (path.headS < sTarget) {
+    const k = curvatureAt(path.headS);
+    path.headH += k * RD.step;
+    path.headX += Math.sin(path.headH) * RD.step;
+    path.headZ += Math.cos(path.headH) * RD.step;
+    path.headS += RD.step;
+    pushSample(path.headS, path.headX, path.headZ, path.headH);
+  }
+}
+
+function pathTrimTo(sMin) {
+  let n = 0;
+  while (path.s.length - n > 8 && path.s[n] < sMin) n++;
+  if (n > 0) {
+    path.s.splice(0, n);
+    path.x.splice(0, n);
+    path.z.splice(0, n);
+    path.y.splice(0, n);
+    path.h.splice(0, n);
+    path.k.splice(0, n);
+    path.b.splice(0, n);
+    path.i0 += n;
+  }
+}
+
+const _fr = {
+  x: 0,
+  y: 0,
+  z: 0,
+  h: 0,
+  k: 0,
+  b: 0
+};
+
+function frameAt(s) {
+  const n = path.s.length;
+  let i = Math.floor((s - path.s[0]) / RD.step);
+  i = clamp(i, 0, n - 2);
+  const t = clamp((s - path.s[i]) / RD.step, 0, 1);
+
+  _fr.x = lerp(path.x[i], path.x[i + 1], t);
+  _fr.z = lerp(path.z[i], path.z[i + 1], t);
+  _fr.y = elevAt(s);
+  _fr.h = lerp(path.h[i], path.h[i + 1], t);
+  _fr.k = curvatureAt(s);
+  _fr.b = bankAt(_fr.k);
+  return _fr;
+}
+
+function roadToWorld(s, n, out) {
+  const f = frameAt(s);
+  const cs = Math.cos(f.h),
+    sn = Math.sin(f.h);
+  out.x = f.x + cs * n;
+  out.z = f.z - sn * n;
+  out.y = roadSurfaceY(f, n);
+  return out;
+}
+
+function roadSurfaceY(f, n) {
+  const an = Math.abs(n);
+  let y = f.y + n * f.b;
+  y -= Math.pow(Math.min(an, RD.half) / RD.half, 2) * 0.075;
+  if (an > RD.half) y -= Math.min(an - RD.half, 1.9) * 0.16;
+  return y;
+}
+
+
+
+
+const CELL = 24;
+const roadGrid = new Map();
+const gkey = (cx, cz) => cx * 73856093 ^ cz * 19349663;
+let gridBuiltTo = -1e9,
+  gridBuiltFrom = 1e9;
+
+function gridInsert(i) {
+  const cx = Math.floor(path.x[i] / CELL),
+    cz = Math.floor(path.z[i] / CELL);
+  const k = gkey(cx, cz);
+  let a = roadGrid.get(k);
+  if (!a) {
+    a = [];
+    roadGrid.set(k, a);
+  }
+  a.push(i + path.i0);
+}
+
+function gridRebuild() {
+  roadGrid.clear();
+  for (let i = 0; i < path.s.length; i++) gridInsert(i);
+  gridBuiltFrom = path.s[0];
+  gridBuiltTo = path.s[path.s.length - 1];
+}
+
+const _q = {
+  d: Infinity,
+  y: 0,
+  s: 0
+};
+
+function nearestRoad(x, z, maxD) {
+  const R = Math.ceil(maxD / CELL);
+  const cx = Math.floor(x / CELL),
+    cz = Math.floor(z / CELL);
+  let bd = maxD * maxD,
+    bi = -1;
+  for (let dz = -R; dz <= R; dz++)
+    for (let dx = -R; dx <= R; dx++) {
+      const a = roadGrid.get(gkey(cx + dx, cz + dz));
+      if (!a) continue;
+      for (let n = 0; n < a.length; n++) {
+        const i = a[n] - path.i0;
+        if (i < 0 || i >= path.s.length) continue;
+        const ddx = path.x[i] - x,
+          ddz = path.z[i] - z;
+        const d2 = ddx * ddx + ddz * ddz;
+        if (d2 < bd) {
+          bd = d2;
+          bi = i;
+        }
+      }
+    }
+  if (bi < 0) {
+    _q.d = Infinity;
+    return _q;
+  }
+  _q.d = Math.sqrt(bd);
+  _q.y = path.y[bi];
+  _q.s = path.s[bi];
+  return _q;
+}
