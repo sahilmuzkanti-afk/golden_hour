@@ -757,23 +757,23 @@ function makeTerrainMat() {
   });
   m.map.repeat.set(1, 1);
   m.onBeforeCompile = fogPatch(sh => {
-        sh.uniforms.tRock = {
-          value: TER.rockMap
-        };
-        sh.uniforms.uSnow = {
-          value: new THREE.Color(0xd9e2ee)
-        };
-        sh.uniforms.uGrass = {
-          value: new THREE.Color(0xffffff)
-        };
-        m.userData.sh = sh;
-        sh.vertexShader = 'attribute float aRock;\nattribute float aSnow;\nvarying float vRock;\nvarying float vSnow;\nvarying vec2 vWXZ;\n' +
-          sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    sh.uniforms.tRock = {
+      value: TER.rockMap
+    };
+    sh.uniforms.uSnow = {
+      value: new THREE.Color(0xd9e2ee)
+    };
+    sh.uniforms.uGrass = {
+      value: new THREE.Color(0xffffff)
+    };
+    m.userData.sh = sh;
+    sh.vertexShader = 'attribute float aRock;\nattribute float aSnow;\nvarying float vRock;\nvarying float vSnow;\nvarying vec2 vWXZ;\n' +
+      sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
         vRock = aRock; vSnow = aSnow;
         vWXZ = (modelMatrix * vec4(transformed,1.0)).xz;`);
-        sh.fragmentShader = 'uniform sampler2D tRock;\nuniform vec3 uSnow;\nuniform vec3 uGrass;\nvarying float vRock;\nvarying float vSnow;\nvarying vec2 vWXZ;\n' +
-          sh.fragmentShader
-          .replace('#include <map_fragment>', `
+    sh.fragmentShader = 'uniform sampler2D tRock;\nuniform vec3 uSnow;\nuniform vec3 uGrass;\nvarying float vRock;\nvarying float vSnow;\nvarying vec2 vWXZ;\n' +
+      sh.fragmentShader
+      .replace('#include <map_fragment>', `
         vec3 cg = texture2D(map, vWXZ * 0.052).rgb * uGrass;
         vec3 cg2= texture2D(map, vWXZ * 0.0121).rgb;
         cg = cg * (0.55 + 0.9*cg2);                       
@@ -781,3 +781,181 @@ function makeTerrainMat() {
         vec3 base = mix(cg, cr*1.05, vRock);
         
         
+        float bio = texture2D(map, vWXZ * 0.00042).r;
+        float bio2= texture2D(map, vWXZ * 0.00131).g;
+        vec3 lush = base * vec3(0.70, 1.00, 0.60);
+        
+        
+        vec3 dry  = base * vec3(1.08, 1.00, 0.78);
+        vec3 ash  = base * vec3(0.86, 0.83, 0.84);
+        base = mix(base, lush, smoothstep(0.26, 0.66, bio)*0.92);
+        base = mix(base, dry , smoothstep(0.58, 0.20, bio)*0.52);
+        base = mix(base, ash , smoothstep(0.58, 0.86, bio2)*0.45);
+        base = mix(base, uSnow, vSnow);
+        diffuseColor.rgb *= base;`)
+      .replace('#include <roughnessmap_fragment>', `
+        float roughnessFactor = mix(0.98, 0.86, vRock);
+        roughnessFactor = mix(roughnessFactor, 0.72, vSnow);`)
+
+
+
+
+
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        #ifdef USE_FOG
+          float bAtt = 1.0 - smoothstep(60.0, 340.0, vFogDepth);
+        #else
+          float bAtt = 1.0;
+        #endif
+        if(bAtt > 0.004){
+          const vec3 LW = vec3(0.299, 0.587, 0.114);
+          vec2 uvB = vWXZ * 0.052;
+          float e  = 0.055;
+          float h0 = dot(texture2D(map, uvB).rgb, LW);
+          float hx = dot(texture2D(map, uvB + vec2(e, 0.0)).rgb, LW);
+          float hz = dot(texture2D(map, uvB + vec2(0.0, e)).rgb, LW);
+          vec3 dW  = vec3(h0 - hx, 0.0, h0 - hz) * (mix(3.4, 1.5, vRock) * bAtt);
+          normal   = normalize(normal + (viewMatrix * vec4(dW, 0.0)).xyz);
+        }`);
+  });
+  m.customProgramCacheKey = () => 'terr-blend';
+  return m;
+}
+const TER = {
+  rockMap: rockFallback
+};
+const terrainMat = makeTerrainMat();
+streamMap('aerial_grass_rock', 'diff', THREE.SRGBColorSpace, t => {
+  terrainMat.map = t;
+  terrainMat.needsUpdate = true;
+  if (terrainMat.userData.sh) terrainMat.userData.sh.uniforms.map = {
+    value: t
+  };
+});
+streamMap('aerial_grass_rock', 'nor_gl', null, t => {
+  t.repeat.set(26, 26);
+  terrainMat.normalMap = t;
+  terrainMat.normalScale.set(0.7, 0.7);
+  terrainMat.needsUpdate = true;
+});
+streamMap('rock_face_03', 'diff', THREE.SRGBColorSpace, t => {
+  TER.rockMap = t;
+  if (terrainMat.userData.sh) terrainMat.userData.sh.uniforms.tRock.value = t;
+});
+
+
+const farTerrainMat = new THREE.MeshStandardMaterial({
+  vertexColors: true,
+  roughness: 0.99,
+  metalness: 0,
+  envMapIntensity: 0.26,
+  dithering: true
+});
+
+
+
+
+const CHUNK_SAMPLES = 24;
+const CHUNK_LEN = CHUNK_SAMPLES * RD.step;
+const roadGroup = new THREE.Group();
+scene.add(roadGroup);
+
+
+const PROF_ROAD = [];
+for (let i = 0; i <= 10; i++) PROF_ROAD.push(-RD.half + (RD.half * 2) * i / 10);
+const PROF_VERGE = [RD.half, RD.half + 0.9, RD.verge];
+const PROF_APRON = [RD.verge, 8.4, 10.8, 14, 17, RD.apron];
+
+const guardMat = new THREE.MeshStandardMaterial({
+  color: 0x9aa1a8,
+  roughness: 0.58,
+  metalness: 0.82,
+  envMapIntensity: 0.52
+});
+const postMat = new THREE.MeshStandardMaterial({
+  color: 0x6d7278,
+  roughness: 0.6,
+  metalness: 0.85,
+  envMapIntensity: 0.8
+});
+
+function buildRibbon(sStart, offs, uvMode) {
+  const rows = CHUNK_SAMPLES + 1,
+    cols = offs.length;
+  const pos = new Float32Array(rows * cols * 3);
+  const nor = new Float32Array(rows * cols * 3);
+  const uv = new Float32Array(rows * cols * 2);
+  const idx = [];
+  const P = {
+    x: 0,
+    y: 0,
+    z: 0
+  };
+  for (let r = 0; r < rows; r++) {
+    const s = sStart + r * RD.step;
+    const f = frameAt(s);
+    const cs = Math.cos(f.h),
+      sn = Math.sin(f.h);
+    for (let c = 0; c < cols; c++) {
+      const n = offs[c];
+      const i3 = (r * cols + c) * 3,
+        i2 = (r * cols + c) * 2;
+      let y;
+      if (uvMode === 2) {
+        const w = 1 - smooth(CARVE_IN, CARVE_OUT, Math.abs(n));
+        const wx = f.x + cs * n,
+          wz = f.z - sn * n;
+        const nat = naturalHeight(wx, wz, corridorDist(wx, wz));
+        const ditch = -0.9 * Math.exp(-Math.pow((Math.abs(n) - 8.2) / 3.4, 2));
+        y = lerp(nat, f.y + n * f.b + ditch - 0.30, w) - 0.02;
+      } else {
+        y = roadSurfaceY(f, n);
+      }
+      pos[i3] = f.x + cs * n;
+      pos[i3 + 1] = y;
+      pos[i3 + 2] = f.z - sn * n;
+      if (uvMode === 0) {
+        uv[i2] = (n + RD.half) / (RD.half * 2);
+        uv[i2 + 1] = s / MARK_TILE;
+      } else {
+        uv[i2] = n / 4.0;
+        uv[i2 + 1] = s / 4.0;
+      }
+    }
+  }
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c,
+        b = a + 1,
+        d = a + cols,
+        e = d + 1;
+      idx.push(a, d, b, b, d, e);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+function buildGuard(sStart, sideSign) {
+
+  const prof = [
+    [0.44, 0.0],
+    [0.53, 0.055],
+    [0.63, 0.018],
+    [0.73, 0.055],
+    [0.82, 0.0]
+  ];
+  const rows = CHUNK_SAMPLES + 1,
+    cols = prof.length;
+  const pos = new Float32Array(rows * cols * 3),
+    idx = [];
+  const nOff = sideSign * (RD.verge - 0.35);
+  for (let r = 0; r < rows; r++) {
+    const s = sStart + r * RD.step;
+    const f = frameAt(s);
+    const cs = Math.cos(f.h),
+      sn = Math.sin(f.h);
+    const baseY = roadSurfaceY(f, nOff);
