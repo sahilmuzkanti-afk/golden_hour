@@ -1317,3 +1317,166 @@ function mergeGeos(list) {
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
+  return out;
+}
+
+const trunkMat = new THREE.MeshStandardMaterial({
+  color: 0x6a5342,
+  roughness: 0.95,
+  metalness: 0,
+  map: barkFallback,
+  envMapIntensity: 0.40
+});
+trunkMat.map.repeat.set(1, 2);
+streamMap('bark_willow', 'diff', THREE.SRGBColorSpace, t => {
+  t.repeat.set(1, 2);
+  trunkMat.map = t;
+  trunkMat.color.setHex(0xc8b49c);
+  trunkMat.needsUpdate = true;
+});
+
+
+
+
+
+
+
+
+
+const LEAF_NEEDLE = 0,
+  LEAF_BROAD = 1;
+const leafAtlas = canvasTex(512, 256, (g, W, H) => {
+  g.clearRect(0, 0, W, H);
+  const w = W / 2,
+    h = H;
+  for (let s = 0; s < 26; s++) {
+    const bx = 22 + hashI(s, 3) * (w - 44),
+      by = h - 6 - hashI(s, 5) * 20;
+    const len = h * (0.52 + hashI(s, 7) * 0.44),
+      spread = 0.44 + hashI(s, 11) * 0.32;
+    const tilt = (hashI(s, 13) - 0.5) * 0.66;
+    for (let n = 0; n < 30; n++) {
+      const t = n / 29,
+        side = n % 2 ? 1 : -1;
+      const ny = by - len * t;
+      const nl = 15 * (1 - t * 0.70) * (0.68 + hashI(s * 31 + n, 17) * 0.64);
+      g.strokeStyle = `hsla(${116+hashI(s*7+n,19)*28},${32+hashI(n,23)*22}%,${10+t*24}%,1)`;
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(bx + tilt * len * t, ny);
+      g.lineTo(bx + tilt * len * t + side * nl * spread, ny + nl * 0.5);
+      g.stroke();
+    }
+  }
+
+
+
+
+  for (let s = 0; s < 150; s++) {
+    const ang = hashI(s, 41) * Math.PI * 2;
+    const rad = Math.pow(hashI(s, 43), 0.62) * 0.46;
+    const cx = w * 1.5 + Math.cos(ang) * rad * w,
+      cy = h * 0.5 + Math.sin(ang) * rad * h;
+    const rx = 7 + hashI(s, 7) * 13,
+      ry = rx * (0.44 + hashI(s, 11) * 0.34);
+    const lum = 17 + hashI(s, 17) * 32;
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(hashI(s, 13) * Math.PI * 2);
+    const grd = g.createLinearGradient(-rx, 0, rx, 0);
+    grd.addColorStop(0, `hsla(${94+hashI(s,19)*30},${26+hashI(s,23)*26}%,${lum}%,1)`);
+    grd.addColorStop(1, `hsla(${86+hashI(s,29)*30},${30+hashI(s,31)*24}%,${lum+13}%,1)`);
+    g.fillStyle = grd;
+
+    g.beginPath();
+    g.moveTo(-rx, 0);
+    g.quadraticCurveTo(0, -ry, rx, 0);
+    g.quadraticCurveTo(0, ry, -rx, 0);
+    g.fill();
+    g.restore();
+  }
+}, {
+  repeat: false
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const AA_ALPHA = `
+  #ifdef USE_ALPHATEST
+    float aaCov = (diffuseColor.a - alphaTest) / max(fwidth(diffuseColor.a), 1e-4) + 0.5;
+    if(aaCov < 0.03) discard;
+    
+
+
+
+
+
+    diffuseColor.a = diffuseColor.a > alphaTest + 0.25 ? 1.0 : min(aaCov, 1.0);
+  #endif`;
+
+function softCutout(mat, extraPatch) {
+
+
+
+
+  mat.transparent = true;
+  mat.depthWrite = true;
+  mat.onBeforeCompile = fogPatch(sh => {
+    if (extraPatch) extraPatch(sh);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', AA_ALPHA);
+  });
+  mat.needsUpdate = true;
+}
+
+
+function leafUV(g, half) {
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * 0.5 + half * 0.5);
+  uv.needsUpdate = true;
+  return g;
+}
+
+const leafMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  map: leafAtlas,
+  roughness: 0.93,
+  metalness: 0,
+  envMapIntensity: 0.46,
+  alphaTest: 0.42,
+  side: THREE.DoubleSide
+});
+const leafPatch = sh => {
+    sh.uniforms.uTime = {
+      value: 0
+    };
+    sh.uniforms.uSunDir = {
+      value: new THREE.Vector3(0, 1, 0)
+    };
+    sh.uniforms.uSunCol = {
+      value: new THREE.Color(0, 0, 0)
+    };
+    leafMat.userData.sh = sh;
+    sh.vertexShader = 'uniform float uTime;\nvarying float vCanY;\nvarying vec3 vObj;\nvarying vec3 vWPos;\n' + sh.vertexShader.replace(
+        '#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        float ph = instanceMatrix[3].x*0.6 + instanceMatrix[3].z*0.4;
+      #else
+        float ph = 0.0;
+      #endif
+      float hgt = max(position.y, 0.0);
+      vCanY = clamp(hgt/7.0, 0.0, 1.0);
+      vObj  = position;
+      transformed.x += sin(uTime*1.05 + ph)*0.035*hgt;
