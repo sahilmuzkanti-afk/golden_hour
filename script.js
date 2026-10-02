@@ -959,3 +959,201 @@ function buildGuard(sStart, sideSign) {
     const cs = Math.cos(f.h),
       sn = Math.sin(f.h);
     const baseY = roadSurfaceY(f, nOff);
+    for (let c = 0; c < cols; c++) {
+      const [hgt, out] = prof[c];
+      const n = nOff + sideSign * out;
+      const i3 = (r * cols + c) * 3;
+      pos[i3] = f.x + cs * n;
+      pos[i3 + 1] = baseY + hgt;
+      pos[i3 + 2] = f.z - sn * n;
+    }
+  }
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c,
+        b = a + 1,
+        d = a + cols,
+        e = d + 1;
+      if (sideSign > 0) idx.push(a, d, b, b, d, e);
+      else idx.push(a, b, d, b, e, d);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+const postGeo = new THREE.BoxGeometry(0.11, 1.0, 0.16);
+
+const roadChunks = new Map();
+
+function chunkIndexOf(s) {
+  return Math.floor(s / CHUNK_LEN);
+}
+
+function makeRoadChunk(ci) {
+  const s0 = ci * CHUNK_LEN;
+  const grp = new THREE.Group();
+
+  const mRoad = new THREE.Mesh(buildRibbon(s0, PROF_ROAD, 0), roadMat);
+  mRoad.receiveShadow = true;
+  mRoad.name = 'road';
+  grp.add(mRoad);
+
+  for (const sgn of [-1, 1]) {
+    const offs = PROF_VERGE.map(v => v * sgn);
+    if (sgn < 0) offs.reverse();
+    const mv = new THREE.Mesh(buildRibbon(s0, offs, 1), vergeMat);
+    mv.receiveShadow = true;
+    mv.name = 'verge';
+    grp.add(mv);
+    const offsA = PROF_APRON.map(v => v * sgn);
+    if (sgn < 0) offsA.reverse();
+    const ma = new THREE.Mesh(buildRibbon(s0, offsA, 2), terrainMat);
+    ma.receiveShadow = true;
+    ma.name = 'apron';
+    grp.add(ma);
+  }
+
+
+  let kMax = 0,
+    kSign = 0;
+  for (let r = 0; r <= CHUNK_SAMPLES; r++) {
+    const k = curvatureAt(s0 + r * RD.step);
+    if (Math.abs(k) > Math.abs(kMax)) {
+      kMax = k;
+    }
+  }
+  if (Math.abs(kMax) > 0.0088) {
+    kSign = kMax > 0 ? -1 : 1;
+    const rail = new THREE.Mesh(buildGuard(s0, kSign), guardMat);
+    rail.castShadow = true;
+    rail.receiveShadow = true;
+    rail.name = 'rail';
+    grp.add(rail);
+    const nPosts = Math.floor(CHUNK_LEN / 4);
+    const posts = new THREE.InstancedMesh(postGeo, postMat, nPosts);
+    posts.castShadow = true;
+    const M = new THREE.Matrix4(),
+      Q = new THREE.Quaternion(),
+      E = new THREE.Euler();
+    const V = new THREE.Vector3(),
+      Sc = new THREE.Vector3(1, 1, 1);
+    for (let p = 0; p < nPosts; p++) {
+      const s = s0 + p * 4 + 2;
+      const f = frameAt(s);
+      const n = kSign * (RD.verge - 0.35);
+      const cs = Math.cos(f.h),
+        sn = Math.sin(f.h);
+      V.set(f.x + cs * n, roadSurfaceY(f, n) + 0.42, f.z - sn * n);
+      E.set(0, f.h, 0);
+      Q.setFromEuler(E);
+      M.compose(V, Q, Sc);
+      posts.setMatrixAt(p, M);
+    }
+    posts.instanceMatrix.needsUpdate = true;
+    posts.name = 'posts';
+    grp.add(posts);
+  }
+  roadGroup.add(grp);
+  return {
+    grp
+  };
+}
+
+function disposeGroup(g) {
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+  });
+  g.removeFromParent();
+}
+
+
+
+
+const RINGS = [{
+    size: 110,
+    seg: 30,
+    seg0: 30,
+    rad: 3,
+    far: false,
+    skirt: 6
+  },
+  {
+    size: 380,
+    seg: 20,
+    seg0: 20,
+    rad: 3,
+    far: false,
+    skirt: 40
+  },
+  {
+    size: 1250,
+    seg: 14,
+    seg0: 14,
+    rad: 3,
+    far: true,
+    skirt: 220
+  },
+];
+const terrainGroup = new THREE.Group();
+scene.add(terrainGroup);
+const tiles = new Map();
+const buildQueue = [];
+
+function tileKey(r, tx, tz) {
+  return r + ':' + tx + ':' + tz;
+}
+
+function buildTile(ring, tx, tz) {
+  const R = RINGS[ring];
+  const seg = R.seg,
+    size = R.size;
+  const ox = tx * size,
+    oz = tz * size;
+  const n = seg + 1;
+  const total = n * n;
+  const pos = new Float32Array(total * 3);
+  const uv = new Float32Array(total * 2);
+  const aRock = new Float32Array(total);
+  const aSnow = new Float32Array(total);
+  const col = R.far ? new Float32Array(total * 3) : null;
+  const idx = [];
+  const hs = new Float32Array(total);
+
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      const x = ox + (i / seg) * size,
+        z = oz + (j / seg) * size;
+      const corr = corridorDist(x, z);
+      const h = R.far ? naturalHeight(x, z, corr) : terrainHeight(x, z, corr);
+      hs[k] = h;
+      pos[k * 3] = x;
+      pos[k * 3 + 1] = h;
+      pos[k * 3 + 2] = z;
+      uv[k * 2] = x / 12;
+      uv[k * 2 + 1] = z / 12;
+    }
+
+  const cellW = size / seg;
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const k = j * n + i;
+      const hL = hs[j * n + Math.max(0, i - 1)],
+        hR = hs[j * n + Math.min(n - 1, i + 1)];
+      const hD = hs[Math.max(0, j - 1) * n + i],
+        hU = hs[Math.min(n - 1, j + 1) * n + i];
+      const gx = (hR - hL) / (2 * cellW),
+        gz = (hU - hD) / (2 * cellW);
+      const slope = Math.sqrt(gx * gx + gz * gz);
+      const h = hs[k];
+      const rk = smooth(0.38, 0.92, slope) * 0.94 + smooth(120, 300, h) * 0.5;
+      const sn = smooth(255, 430, h) * (1 - smooth(0.95, 1.7, slope) * 0.75);
+      aRock[k] = clamp(rk, 0, 1);
+      aSnow[k] = clamp(sn, 0, 1);
+      if (col) {
+        const g = new THREE.Color();
+        g.setRGB(0.085, 0.115, 0.055);
+        const rock = new THREE.Color(0.135, 0.125, 0.115);
+        const snow = new THREE.Color(0.80, 0.84, 0.90);
