@@ -1157,3 +1157,163 @@ function buildTile(ring, tx, tz) {
         g.setRGB(0.085, 0.115, 0.055);
         const rock = new THREE.Color(0.135, 0.125, 0.115);
         const snow = new THREE.Color(0.80, 0.84, 0.90);
+        g.lerp(rock, clamp(rk, 0, 1));
+        g.lerp(snow, clamp(sn, 0, 1));
+        col[k * 3] = g.r;
+        col[k * 3 + 1] = g.g;
+        col[k * 3 + 2] = g.b;
+      }
+    }
+  for (let j = 0; j < seg; j++)
+    for (let i = 0; i < seg; i++) {
+      const a = j * n + i,
+        b = a + 1,
+        c = a + n,
+        d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  if (col) g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  else {
+    g.setAttribute('aRock', new THREE.BufferAttribute(aRock, 1));
+    g.setAttribute('aSnow', new THREE.BufferAttribute(aSnow, 1));
+  }
+  g.setIndex(idx);
+  g.computeVertexNormals();
+
+  const mesh = new THREE.Mesh(g, R.far ? farTerrainMat : terrainMat);
+  mesh.receiveShadow = !R.far;
+  mesh.userData.ring = ring;
+  mesh.userData.seg = seg;
+  mesh.userData.tx = tx;
+  mesh.userData.tz = tz;
+  mesh.userData.heights = hs;
+  mesh.name = 'terrain' + ring;
+  terrainGroup.add(mesh);
+  return mesh;
+}
+
+function updateTiles(cx, cz) {
+  const want = new Set();
+  for (let r = 0; r < RINGS.length; r++) {
+    const R = RINGS[r];
+    const ctx = Math.floor(cx / R.size),
+      ctz = Math.floor(cz / R.size);
+    for (let dz = -R.rad; dz <= R.rad; dz++)
+      for (let dx = -R.rad; dx <= R.rad; dx++) {
+        const tx = ctx + dx,
+          tz = ctz + dz;
+
+        if (r > 0) {
+          const F = RINGS[r - 1];
+          const fx0 = Math.floor(cx / F.size) - F.rad,
+            fx1 = Math.floor(cx / F.size) + F.rad;
+          const fz0 = Math.floor(cz / F.size) - F.rad,
+            fz1 = Math.floor(cz / F.size) + F.rad;
+          const covX0 = fx0 * F.size,
+            covX1 = (fx1 + 1) * F.size;
+          const covZ0 = fz0 * F.size,
+            covZ1 = (fz1 + 1) * F.size;
+          if (tx * R.size >= covX0 && (tx + 1) * R.size <= covX1 &&
+            tz * R.size >= covZ0 && (tz + 1) * R.size <= covZ1) continue;
+        }
+        const key = tileKey(r, tx, tz);
+        want.add(key);
+        if (!tiles.has(key)) {
+          tiles.set(key, 'pending');
+          buildQueue.push({
+            r,
+            tx,
+            tz,
+            key,
+            d: Math.hypot((tx + 0.5) * R.size - cx, (tz + 0.5) * R.size - cz)
+          });
+        }
+      }
+  }
+  for (const [key, m] of tiles) {
+    if (!want.has(key)) {
+      if (m !== 'pending') {
+        m.geometry.dispose();
+        m.removeFromParent();
+        scatterDrop(key);
+      }
+      tiles.delete(key);
+    }
+  }
+  buildQueue.sort((a, b) => a.d - b.d);
+}
+
+
+
+
+const scatterQueue = [];
+
+function drainQueue(budget, scatterBudget) {
+  let n = 0;
+  while (buildQueue.length && n < budget) {
+    const t = buildQueue.shift();
+    const cur = tiles.get(t.key);
+
+
+    if (t.replace ? (cur === undefined || cur === 'pending') : cur !== 'pending') continue;
+    const mesh = buildTile(t.r, t.tx, t.tz);
+    if (t.replace) {
+      cur.geometry.dispose();
+      cur.removeFromParent();
+    }
+    tiles.set(t.key, mesh);
+
+
+    if (t.r === 0 && !t.replace) scatterQueue.push(t);
+    n++;
+  }
+  const sb = scatterBudget === undefined ? budget : scatterBudget;
+  let m = 0;
+  while (scatterQueue.length && m < sb) {
+    const t = scatterQueue.shift();
+    if (!tiles.has(t.key)) continue;
+    scatterTile(t.key, tiles.get(t.key), t.tx, t.tz, RINGS[0].size);
+    m++;
+  }
+}
+
+
+
+
+
+function mergeGeos(list) {
+  let vc = 0,
+    ic = 0;
+  for (const g of list) {
+    const n = g.attributes.position.count;
+    vc += n;
+    ic += g.index ? g.index.count : n;
+  }
+  const pos = new Float32Array(vc * 3),
+    nor = new Float32Array(vc * 3),
+    uv = new Float32Array(vc * 2);
+  const idx = new Uint32Array(ic);
+  let vo = 0,
+    io = 0;
+  for (const g of list) {
+    const n = g.attributes.position.count;
+    pos.set(g.attributes.position.array, vo * 3);
+    if (g.attributes.normal) nor.set(g.attributes.normal.array, vo * 3);
+    if (g.attributes.uv) uv.set(g.attributes.uv.array, vo * 2);
+    if (g.index) {
+      const gi = g.index.array;
+      for (let i = 0; i < gi.length; i++) idx[io + i] = gi[i] + vo;
+      io += gi.length;
+    } else {
+      for (let i = 0; i < n; i++) idx[io + i] = i + vo;
+      io += n;
+    }
+    vo += n;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
