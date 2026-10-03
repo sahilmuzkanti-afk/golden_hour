@@ -1622,22 +1622,206 @@ const G_trunk_oak = (() => {
   return mergeGeos(l);
 })();
 const G_leaf_oak = (() => {
-      const l = [];
-      const CY = 4.25,
-        RX = 2.95,
-        RY = 1.95,
-        RZ = 2.85;
+  const l = [];
+  const CY = 4.25,
+    RX = 2.95,
+    RY = 1.95,
+    RZ = 2.85;
 
 
-      for (let i = 0; i < 58; i++) {
-        const u = hash1(i * 7.1 + 3),
-          v = hash1(i * 13.3 + 5),
-          w = hash1(i * 19.7 + 11);
-        const th = u * TAU,
-          ph = Math.acos(2 * v - 1),
-          rr = 0.46 + 0.54 * Math.sqrt(w);
-        const x = Math.sin(ph) * Math.cos(th) * RX * rr;
-        const y = Math.cos(ph) * RY * rr;
-        const z = Math.sin(ph) * Math.sin(th) * RZ * rr;
-        const s = 1.04 + hash1(i * 29.1 + 7) * 1.06;
-        const q = leafUV(new THREE.PlaneGeometry(s, s * 0.86), LEAF_BROAD);
+  for (let i = 0; i < 58; i++) {
+    const u = hash1(i * 7.1 + 3),
+      v = hash1(i * 13.3 + 5),
+      w = hash1(i * 19.7 + 11);
+    const th = u * TAU,
+      ph = Math.acos(2 * v - 1),
+      rr = 0.46 + 0.54 * Math.sqrt(w);
+    const x = Math.sin(ph) * Math.cos(th) * RX * rr;
+    const y = Math.cos(ph) * RY * rr;
+    const z = Math.sin(ph) * Math.sin(th) * RZ * rr;
+    const s = 1.04 + hash1(i * 29.1 + 7) * 1.06;
+    const q = leafUV(new THREE.PlaneGeometry(s, s * 0.86), LEAF_BROAD);
+    q.rotateZ(hash1(i * 31.3 + 2) * TAU);
+    q.rotateX((hash1(i * 37.7 + 4) - 0.5) * 2.4);
+    q.rotateY(hash1(i * 41.9 + 6) * TAU);
+    q.translate(x, CY + y, z);
+    l.push(q);
+  }
+  return canopyNormals(mergeGeos(l), CY, 0.42);
+})();
+const G_rock = (() => {
+  const g = new THREE.IcosahedronGeometry(1, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i),
+      y = p.getY(i),
+      z = p.getZ(i);
+    const d = 0.68 + 0.5 * Math.abs(vnoise(x * 1.7 + 9, z * 1.7 + 3)) + 0.28 * Math.abs(vnoise(y * 2.3, x * 2.3));
+    p.setXYZ(i, x * d, y * d * 0.68, z * d);
+  }
+  g.computeVertexNormals();
+  return g;
+})();
+const rockMat = new THREE.MeshStandardMaterial({
+  color: 0x8d8880,
+  roughness: 0.94,
+  metalness: 0,
+  envMapIntensity: 0.30,
+  map: rockFallback
+});
+rockMat.map.repeat.set(0.6, 0.6);
+streamMap('rock_face_03', 'diff', THREE.SRGBColorSpace, t => {
+  t.repeat.set(0.55, 0.55);
+  rockMat.map = t;
+  rockMat.color.setHex(0xffffff);
+  rockMat.needsUpdate = true;
+});
+streamMap('rock_face_03', 'nor_gl', null, t => {
+  t.repeat.set(0.55, 0.55);
+  rockMat.normalMap = t;
+  rockMat.needsUpdate = true;
+});
+
+
+const grassCardTex = canvasTex(256, 256, (g, w, h) => {
+  g.clearRect(0, 0, w, h);
+
+
+  for (let b = 0; b < 46; b++) {
+    const x0 = 6 + hashI(b, 3) * (w - 12);
+    const bw = 1.6 + hashI(b, 9) * 3.4;
+    const bh = h * (0.36 + hashI(b, 17) * 0.60);
+    const bend = (hashI(b, 23) - 0.5) * 44;
+    const grd = g.createLinearGradient(0, h, 0, h - bh);
+    const hue = 72 + hashI(b, 31) * 30;
+    grd.addColorStop(0, `hsla(${hue},38%,20%,1)`);
+    grd.addColorStop(0.55, `hsla(${hue+8},48%,40%,1)`);
+
+    grd.addColorStop(1, `hsla(${hue+22},56%,63%,1)`);
+    g.fillStyle = grd;
+    g.beginPath();
+    g.moveTo(x0, h);
+    g.quadraticCurveTo(x0 + bend * 0.5, h - bh * 0.6, x0 + bend + bw * 0.4, h - bh);
+    g.quadraticCurveTo(x0 + bend * 0.5 + bw, h - bh * 0.6, x0 + bw, h);
+    g.closePath();
+    g.fill();
+  }
+}, {
+  repeat: false
+});
+const grassMat = new THREE.MeshStandardMaterial({
+  map: grassCardTex,
+  color: 0xa9b477,
+  alphaTest: 0.34,
+  side: THREE.DoubleSide,
+  alphaToCoverage: true,
+  roughness: 0.92,
+  metalness: 0,
+  envMapIntensity: 0.30,
+  depthWrite: true
+});
+grassMat.onBeforeCompile = fogPatch(sh => {
+  sh.uniforms.uTime = {
+    value: 0
+  };
+  grassMat.userData.sh = sh;
+  sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace(
+      '#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        float ph = instanceMatrix[3].x*0.9 + instanceMatrix[3].z*0.7;
+      #else
+        float ph = 0.0;
+      #endif
+      float hh = max(position.y,0.0);
+      transformed.x += sin(uTime*2.1+ph)*0.16*hh;
+      transformed.z += cos(uTime*1.7+ph*1.4)*0.11*hh;`)
+    .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+      
+
+
+
+      objectNormal = normalize(mix(objectNormal, vec3(0.0,1.0,0.0), 0.78));`);
+});
+grassMat.customProgramCacheKey = () => 'grass-sway';
+const G_grass = (() => {
+  const a = new THREE.PlaneGeometry(0.78, 0.62);
+  a.translate(0, 0.31, 0);
+  const b = a.clone();
+  b.rotateY(Math.PI / 2.6);
+  const c = a.clone();
+  c.rotateY(-Math.PI / 2.6);
+  return mergeGeos([a, b, c]);
+})();
+
+
+
+
+
+
+
+
+const treeImpostor = canvasTex(512, 512, (g, W, H) => {
+      g.clearRect(0, 0, W, H);
+      const half = W / 2;
+
+      (() => {
+        const cx = half * 0.5,
+          base = H * 0.985,
+          top = H * 0.045,
+          hgt = base - top;
+        g.strokeStyle = '#3a2d20';
+        g.lineWidth = half * 0.045;
+        g.beginPath();
+        g.moveTo(cx, base);
+        g.lineTo(cx, top + hgt * 0.10);
+        g.stroke();
+        for (let tier = 0; tier < 13; tier++) {
+          const t = tier / 12;
+          const y = top + hgt * (0.06 + t * 0.92);
+          const rad = half * 0.40 * Math.pow(t, 0.72) + half * 0.03;
+          const dep = hgt * 0.11;
+
+
+          for (let s = -1; s <= 1; s += 2) {
+            g.beginPath();
+            g.moveTo(cx, y - dep * 0.55);
+            for (let i = 0; i <= 9; i++) {
+              const u = i / 9;
+              const jag = (hashI(tier * 17 + i, 5 + s) - 0.5) * rad * 0.22;
+              g.lineTo(cx + s * (rad * u + jag), y + dep * u * (0.6 + hashI(tier + i, 9) * 0.7));
+            }
+            g.lineTo(cx, y + dep * 0.30);
+            g.closePath();
+            const l = 15 + t * 13 + hashI(tier, 3) * 7;
+            g.fillStyle = `hsl(${112+hashI(tier,11)*22}, ${30+hashI(tier,13)*16}%, ${l}%)`;
+            g.fill();
+          }
+        }
+      })();
+
+      (() => {
+          const cx = half * 1.5,
+            base = H * 0.985,
+            hgt = H * 0.94;
+          g.strokeStyle = '#41321f';
+          g.lineCap = 'round';
+          g.lineWidth = half * 0.055;
+          g.beginPath();
+          g.moveTo(cx, base);
+          g.lineTo(cx, base - hgt * 0.40);
+          g.stroke();
+          for (const [a, ln] of [
+              [-0.6, 0.30],
+              [0.55, 0.34],
+              [-0.25, 0.22],
+              [0.22, 0.26]
+            ]) {
+            g.lineWidth = half * 0.028;
+            g.beginPath();
+            g.moveTo(cx, base - hgt * 0.38);
+            g.lineTo(cx + Math.sin(a) * half * 0.34, base - hgt * (0.38 + ln));
+            g.stroke();
+          }
+          const ccy = base - hgt * 0.66,
+            rx = half * 0.44,
+            ry = hgt * 0.30;
