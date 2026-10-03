@@ -1761,67 +1761,227 @@ const G_grass = (() => {
 
 
 const treeImpostor = canvasTex(512, 512, (g, W, H) => {
-      g.clearRect(0, 0, W, H);
-      const half = W / 2;
+  g.clearRect(0, 0, W, H);
+  const half = W / 2;
 
-      (() => {
-        const cx = half * 0.5,
-          base = H * 0.985,
-          top = H * 0.045,
-          hgt = base - top;
-        g.strokeStyle = '#3a2d20';
-        g.lineWidth = half * 0.045;
+  (() => {
+    const cx = half * 0.5,
+      base = H * 0.985,
+      top = H * 0.045,
+      hgt = base - top;
+    g.strokeStyle = '#3a2d20';
+    g.lineWidth = half * 0.045;
+    g.beginPath();
+    g.moveTo(cx, base);
+    g.lineTo(cx, top + hgt * 0.10);
+    g.stroke();
+    for (let tier = 0; tier < 13; tier++) {
+      const t = tier / 12;
+      const y = top + hgt * (0.06 + t * 0.92);
+      const rad = half * 0.40 * Math.pow(t, 0.72) + half * 0.03;
+      const dep = hgt * 0.11;
+
+
+      for (let s = -1; s <= 1; s += 2) {
         g.beginPath();
-        g.moveTo(cx, base);
-        g.lineTo(cx, top + hgt * 0.10);
-        g.stroke();
-        for (let tier = 0; tier < 13; tier++) {
-          const t = tier / 12;
-          const y = top + hgt * (0.06 + t * 0.92);
-          const rad = half * 0.40 * Math.pow(t, 0.72) + half * 0.03;
-          const dep = hgt * 0.11;
-
-
-          for (let s = -1; s <= 1; s += 2) {
-            g.beginPath();
-            g.moveTo(cx, y - dep * 0.55);
-            for (let i = 0; i <= 9; i++) {
-              const u = i / 9;
-              const jag = (hashI(tier * 17 + i, 5 + s) - 0.5) * rad * 0.22;
-              g.lineTo(cx + s * (rad * u + jag), y + dep * u * (0.6 + hashI(tier + i, 9) * 0.7));
-            }
-            g.lineTo(cx, y + dep * 0.30);
-            g.closePath();
-            const l = 15 + t * 13 + hashI(tier, 3) * 7;
-            g.fillStyle = `hsl(${112+hashI(tier,11)*22}, ${30+hashI(tier,13)*16}%, ${l}%)`;
-            g.fill();
-          }
+        g.moveTo(cx, y - dep * 0.55);
+        for (let i = 0; i <= 9; i++) {
+          const u = i / 9;
+          const jag = (hashI(tier * 17 + i, 5 + s) - 0.5) * rad * 0.22;
+          g.lineTo(cx + s * (rad * u + jag), y + dep * u * (0.6 + hashI(tier + i, 9) * 0.7));
         }
-      })();
+        g.lineTo(cx, y + dep * 0.30);
+        g.closePath();
+        const l = 15 + t * 13 + hashI(tier, 3) * 7;
+        g.fillStyle = `hsl(${112+hashI(tier,11)*22}, ${30+hashI(tier,13)*16}%, ${l}%)`;
+        g.fill();
+      }
+    }
+  })();
 
-      (() => {
-          const cx = half * 1.5,
-            base = H * 0.985,
-            hgt = H * 0.94;
-          g.strokeStyle = '#41321f';
-          g.lineCap = 'round';
-          g.lineWidth = half * 0.055;
-          g.beginPath();
-          g.moveTo(cx, base);
-          g.lineTo(cx, base - hgt * 0.40);
-          g.stroke();
-          for (const [a, ln] of [
-              [-0.6, 0.30],
-              [0.55, 0.34],
-              [-0.25, 0.22],
-              [0.22, 0.26]
-            ]) {
-            g.lineWidth = half * 0.028;
-            g.beginPath();
-            g.moveTo(cx, base - hgt * 0.38);
-            g.lineTo(cx + Math.sin(a) * half * 0.34, base - hgt * (0.38 + ln));
-            g.stroke();
-          }
-          const ccy = base - hgt * 0.66,
-            rx = half * 0.44,
-            ry = hgt * 0.30;
+  (() => {
+    const cx = half * 1.5,
+      base = H * 0.985,
+      hgt = H * 0.94;
+    g.strokeStyle = '#41321f';
+    g.lineCap = 'round';
+    g.lineWidth = half * 0.055;
+    g.beginPath();
+    g.moveTo(cx, base);
+    g.lineTo(cx, base - hgt * 0.40);
+    g.stroke();
+    for (const [a, ln] of [
+        [-0.6, 0.30],
+        [0.55, 0.34],
+        [-0.25, 0.22],
+        [0.22, 0.26]
+      ]) {
+      g.lineWidth = half * 0.028;
+      g.beginPath();
+      g.moveTo(cx, base - hgt * 0.38);
+      g.lineTo(cx + Math.sin(a) * half * 0.34, base - hgt * (0.38 + ln));
+      g.stroke();
+    }
+    const ccy = base - hgt * 0.66,
+      rx = half * 0.44,
+      ry = hgt * 0.30;
+    for (let i = 0; i < 70; i++) {
+      const ang = hashI(i, 29) * Math.PI * 2,
+        rr = Math.pow(hashI(i, 31), 0.5);
+      const x = cx + Math.cos(ang) * rr * rx,
+        y = ccy + Math.sin(ang) * rr * ry;
+      const r = half * (0.10 + hashI(i, 37) * 0.085) * (1.05 - rr * 0.35);
+
+      const l = 13 + (1 - (y - (ccy - ry)) / (2 * ry)) * 15 + hashI(i, 41) * 9;
+      g.fillStyle = `hsl(${96+hashI(i,43)*26}, ${28+hashI(i,47)*20}%, ${l}%)`;
+      g.beginPath();
+      g.ellipse(x, y, r, r * 0.86, hashI(i, 53) * 3.14, 0, 6.2832);
+      g.fill();
+    }
+  })();
+});
+treeImpostor.wrapS = treeImpostor.wrapT = THREE.ClampToEdgeWrapping;
+
+
+function impostor(w, h, half, n) {
+  const l = [];
+  for (let i = 0; i < n; i++) {
+    const q = leafUV(new THREE.PlaneGeometry(w, h), half);
+    q.rotateY(i * Math.PI / n);
+    q.translate(0, h * 0.5, 0);
+    l.push(q);
+  }
+  const g = mergeGeos(l);
+
+
+
+  const nor = g.attributes.normal,
+    v = new THREE.Vector3();
+  for (let i = 0; i < nor.count; i++) {
+    v.set(nor.getX(i), nor.getY(i) + 1.15, nor.getZ(i)).normalize();
+    nor.setXYZ(i, v.x, v.y, v.z);
+  }
+  return g;
+}
+
+
+const G_far_pine = impostor(4.2, 6.6, LEAF_NEEDLE, 2);
+const G_far_oak = impostor(6.0, 6.6, LEAF_BROAD, 2);
+
+
+
+const farTreeMat = new THREE.MeshStandardMaterial({
+  map: treeImpostor,
+  roughness: 0.95,
+  metalness: 0,
+  envMapIntensity: 0.42,
+  alphaTest: 0.45,
+  side: THREE.DoubleSide
+});
+softCutout(farTreeMat);
+farTreeMat.customProgramCacheKey = () => 'far-tree-aa';
+
+const CAP = {
+  pineT: 1500,
+  pineL: 1500,
+  oakT: 800,
+  oakL: 800,
+  pineF: 5200,
+  oakF: 2800,
+  rock: 700,
+  grass: 5200
+};
+const IM = {
+  pineT: new THREE.InstancedMesh(G_trunk_pine, trunkMat, CAP.pineT),
+  pineL: new THREE.InstancedMesh(G_leaf_pine, leafMat, CAP.pineL),
+  oakT: new THREE.InstancedMesh(G_trunk_oak, trunkMat, CAP.oakT),
+  oakL: new THREE.InstancedMesh(G_leaf_oak, leafMat, CAP.oakL),
+  pineF: new THREE.InstancedMesh(G_far_pine, farTreeMat, CAP.pineF),
+  oakF: new THREE.InstancedMesh(G_far_oak, farTreeMat, CAP.oakF),
+  rock: new THREE.InstancedMesh(G_rock, rockMat, CAP.rock),
+  grass: new THREE.InstancedMesh(G_grass, grassMat, CAP.grass),
+};
+for (const k in IM) {
+
+
+  IM[k].castShadow = (k !== 'grass' && k !== 'pineF' && k !== 'oakF');
+  IM[k].receiveShadow = (k !== 'pineF' && k !== 'oakF');
+  IM[k].frustumCulled = false;
+  IM[k].count = 0;
+  IM[k].name = k;
+  scene.add(IM[k]);
+}
+
+
+const _LC = new THREE.Color();
+
+function leafTint(seed) {
+  const r = hash1(seed * 53);
+
+
+  const h = r < 0.14 ? 0.095 + hash1(seed * 13) * 0.055 :
+    0.238 + (hash1(seed * 13) - 0.5) * 0.070;
+  const s = 0.22 + hash1(seed * 29) * 0.22;
+  const l = 0.165 + hash1(seed * 41) * 0.145;
+  return _LC.setHSL(h, s, l);
+}
+const _RC = new THREE.Color();
+for (const [k, n] of [
+    ['pineL', CAP.pineL],
+    ['oakL', CAP.oakL],
+    ['pineF', CAP.pineF],
+    ['oakF', CAP.oakF],
+    ['rock', CAP.rock]
+  ])
+  IM[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
+const scatterStore = new Map();
+
+
+
+
+
+
+function canopyAt(s) {
+  const a = Math.sin(s * 0.00430 + 0.7) * 0.55 +
+    Math.sin(s * 0.00190 + 2.3) * 0.34 +
+    Math.sin(s * 0.01040 + 4.1) * 0.12;
+  return smooth(-0.30, 0.34, a);
+}
+
+function scatterTile(key, mesh, tx, tz, size) {
+  const out = {
+    pine: [],
+    oak: [],
+    rock: [],
+    grass: []
+  };
+
+
+  const step = 4.6;
+  const nS = Math.floor(size / step);
+  for (let j = 0; j < nS; j++)
+    for (let i = 0; i < nS; i++) {
+      const seed = (tx * 7919 + tz * 104729 + i * 131 + j * 7);
+      const jx = hash1(seed * 3 + 1),
+        jz = hash1(seed * 3 + 2),
+        pick = hash1(seed * 3 + 5);
+      const x = tx * size + (i + jx) * step,
+        z = tz * size + (j + jz) * step;
+      const corr = corridorDist(x, z);
+      if (corr > 340) continue;
+      const q = nearestRoad(x, z, 70);
+      const d = q.d;
+      if (d < 8.6) continue;
+
+      const can = canopyAt(q.s);
+      const stand = fbm(x * 0.00135, z * 0.00135, 3) * 0.5 + 0.5;
+      const clump = fbm(x * 0.0094, z * 0.0094, 2) * 0.5 + 0.5;
+
+
+      const base = smooth(0.40, 0.58, stand) * smooth(0.20, 0.52, clump);
+
+
+      const forest = base * lerp(0.42, 6.4, can);
+
+
+      const nearOK = lerp(17.0, 8.2, can);
