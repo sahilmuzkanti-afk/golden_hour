@@ -2494,85 +2494,387 @@ const KEYS = [
 
 
 
-    {
-      t: 0.00,
-      name: 'Golden Hour',
-      elev: 9.5,
-      turb: 5.0,
-      ray: 2.30,
-      mie: 0.0060,
-      mieG: 0.86,
-      sun: C(0xffc27a),
-      sunI: 3.8,
-      hemiS: C(0xffd6a4),
-      hemiG: C(0x8c6e48),
-      hemiI: 0.58,
-      fog: C(0xf0b478),
-      fogD: 0.00032,
-      exp: 0.90,
-      night: 0.0,
-      star: 0.0,
-      bloom: 0.30,
-      ray_: 0.34,
-      grade: C(0xffd9b0),
-      cloud: 0.46
-    },
-    {
-      t: 0.13,
-      name: 'Golden Hour',
-      elev: 4.2,
-      turb: 6.2,
-      ray: 2.85,
-      mie: 0.0075,
-      mieG: 0.875,
-      sun: C(0xffa658),
-      sunI: 3.9,
-      hemiS: C(0xffc593),
-      hemiG: C(0x7c6140),
-      hemiI: 0.55,
-      fog: C(0xeda269),
-      fogD: 0.00042,
-      exp: 0.95,
-      night: 0.0,
-      star: 0.0,
-      bloom: 0.42,
-      ray_: 0.58,
-      grade: C(0xffd2a4),
-      cloud: 0.5
-    },
-    {
-      t: 0.22,
-      name: 'Sunset',
-      elev: 0.4,
-      turb: 8.6,
-      ray: 3.60,
-      mie: 0.0102,
-      mieG: 0.895,
-      sun: C(0xff7434),
-      sunI: 3.7,
-      hemiS: C(0xff9463),
-      hemiG: C(0x674934),
-      hemiI: 0.46,
-      fog: C(0xe07a44),
-      fogD: 0.00058,
-      exp: 1.04,
-      night: 0.0,
-      star: 0.02,
-      bloom: 0.86,
-      ray_: 1.55,
-      grade: C(0xffc79a),
-      cloud: 0.56
-    },
-    {
-      t: 0.30,
-      name: 'Dusk',
-      elev: -3.4,
-      turb: 7.0,
-      ray: 3.30,
-      mie: 0.0088,
-      mieG: 0.878,
-      sun: C(0xb0608c),
-      sunI: 1.30,
-      hemiS: C(0x8f6f9e),
-      hemiG: C(0x453648),
-      hemiI: 0.40,
+  {
+    t: 0.00,
+    name: 'Golden Hour',
+    elev: 9.5,
+    turb: 5.0,
+    ray: 2.30,
+    mie: 0.0060,
+    mieG: 0.86,
+    sun: C(0xffc27a),
+    sunI: 3.8,
+    hemiS: C(0xffd6a4),
+    hemiG: C(0x8c6e48),
+    hemiI: 0.58,
+    fog: C(0xf0b478),
+    fogD: 0.00032,
+    exp: 0.90,
+    night: 0.0,
+    star: 0.0,
+    bloom: 0.30,
+    ray_: 0.34,
+    grade: C(0xffd9b0),
+    cloud: 0.46
+  },
+  {
+    t: 0.13,
+    name: 'Golden Hour',
+    elev: 4.2,
+    turb: 6.2,
+    ray: 2.85,
+    mie: 0.0075,
+    mieG: 0.875,
+    sun: C(0xffa658),
+    sunI: 3.9,
+    hemiS: C(0xffc593),
+    hemiG: C(0x7c6140),
+    hemiI: 0.55,
+    fog: C(0xeda269),
+    fogD: 0.00042,
+    exp: 0.95,
+    night: 0.0,
+    star: 0.0,
+    bloom: 0.42,
+    ray_: 0.58,
+    grade: C(0xffd2a4),
+    cloud: 0.5
+  },
+  {
+    t: 0.22,
+    name: 'Sunset',
+    elev: 0.4,
+    turb: 8.6,
+    ray: 3.60,
+    mie: 0.0102,
+    mieG: 0.895,
+    sun: C(0xff7434),
+    sunI: 3.7,
+    hemiS: C(0xff9463),
+    hemiG: C(0x674934),
+    hemiI: 0.46,
+    fog: C(0xe07a44),
+    fogD: 0.00058,
+    exp: 1.04,
+    night: 0.0,
+    star: 0.02,
+    bloom: 0.86,
+    ray_: 1.55,
+    grade: C(0xffc79a),
+    cloud: 0.56
+  },
+  {
+    t: 0.30,
+    name: 'Dusk',
+    elev: -3.4,
+    turb: 7.0,
+    ray: 3.30,
+    mie: 0.0088,
+    mieG: 0.878,
+    sun: C(0xb0608c),
+    sunI: 1.30,
+    hemiS: C(0x8f6f9e),
+    hemiG: C(0x453648),
+    hemiI: 0.40,
+    fog: C(0x8a5f7e),
+    fogD: 0.00074,
+    exp: 1.10,
+    night: 0.18,
+    star: 0.16,
+    bloom: 0.90,
+    ray_: 0.75,
+    grade: C(0xe8bfd0),
+    cloud: 0.54
+  },
+  {
+    t: 0.38,
+    name: 'Dusk',
+    elev: -8.0,
+    turb: 5.2,
+    ray: 2.20,
+    mie: 0.0064,
+    mieG: 0.855,
+    sun: C(0x6d5aa8),
+    sunI: 0.56,
+    hemiS: C(0x4e4a86),
+    hemiG: C(0x241f2e),
+    hemiI: 0.32,
+    fog: C(0x4a4370),
+    fogD: 0.00118,
+    exp: 1.22,
+    night: 0.52,
+    star: 0.52,
+    bloom: 0.86,
+    ray_: 0.22,
+    grade: C(0xc8c2e6),
+    cloud: 0.46
+  },
+  {
+    t: 0.48,
+    name: 'Night',
+    elev: -17.0,
+    turb: 2.6,
+    ray: 0.75,
+    mie: 0.0042,
+    mieG: 0.80,
+    sun: C(0x9fb6e8),
+    sunI: 0.40,
+    hemiS: C(0x1e2846),
+    hemiG: C(0x0a0d16),
+    hemiI: 0.24,
+    fog: C(0x111a2e),
+    fogD: 0.00140,
+    exp: 1.44,
+    night: 0.94,
+    star: 1.0,
+    bloom: 0.78,
+    ray_: 0.0,
+    grade: C(0xa8c0e8),
+    cloud: 0.34
+  },
+  {
+    t: 0.63,
+    name: 'Night',
+    elev: -21.0,
+    turb: 2.2,
+    ray: 0.60,
+    mie: 0.0038,
+    mieG: 0.80,
+    sun: C(0x97afe4),
+    sunI: 0.38,
+    hemiS: C(0x1a2340),
+    hemiG: C(0x080b13),
+    hemiI: 0.22,
+    fog: C(0x0d1526),
+    fogD: 0.00148,
+    exp: 1.50,
+    night: 1.0,
+    star: 1.0,
+    bloom: 0.76,
+    ray_: 0.0,
+    grade: C(0xa4bce6),
+    cloud: 0.3
+  },
+  {
+    t: 0.74,
+    name: 'Dawn',
+    elev: -7.5,
+    turb: 4.6,
+    ray: 2.60,
+    mie: 0.0060,
+    mieG: 0.86,
+    sun: C(0x8a6fb8),
+    sunI: 0.55,
+    hemiS: C(0x6a5a96),
+    hemiG: C(0x2a2434),
+    hemiI: 0.32,
+    fog: C(0x574a78),
+    fogD: 0.00122,
+    exp: 1.26,
+    night: 0.46,
+    star: 0.46,
+    bloom: 0.86,
+    ray_: 0.30,
+    grade: C(0xd6c4ea),
+    cloud: 0.38
+  },
+  {
+    t: 0.82,
+    name: 'Dawn',
+    elev: -1.6,
+    turb: 5.4,
+    ray: 3.50,
+    mie: 0.0080,
+    mieG: 0.885,
+    sun: C(0xffa0bc),
+    sunI: 1.85,
+    hemiS: C(0xd193bd),
+    hemiG: C(0x40303e),
+    hemiI: 0.44,
+    fog: C(0xba7f9e),
+    fogD: 0.00068,
+    exp: 1.12,
+    night: 0.12,
+    star: 0.12,
+    bloom: 0.92,
+    ray_: 0.95,
+    grade: C(0xffd0dc),
+    cloud: 0.5
+  },
+  {
+    t: 0.89,
+    name: 'Sunrise',
+    elev: 2.2,
+    turb: 6.4,
+    ray: 3.10,
+    mie: 0.0086,
+    mieG: 0.888,
+    sun: C(0xffa561),
+    sunI: 4.0,
+    hemiS: C(0xffbe98),
+    hemiG: C(0x584330),
+    hemiI: 0.50,
+    fog: C(0xe89a6e),
+    fogD: 0.00048,
+    exp: 1.04,
+    night: 0.0,
+    star: 0.0,
+    bloom: 0.86,
+    ray_: 1.45,
+    grade: C(0xffd8b8),
+    cloud: 0.52
+  },
+
+  {
+    t: 1.00,
+    name: 'Golden Hour',
+    elev: 9.5,
+    turb: 5.0,
+    ray: 2.30,
+    mie: 0.0060,
+    mieG: 0.86,
+    sun: C(0xffc27a),
+    sunI: 3.8,
+    hemiS: C(0xffd6a4),
+    hemiG: C(0x8c6e48),
+    hemiI: 0.58,
+    fog: C(0xf0b478),
+    fogD: 0.00032,
+    exp: 0.90,
+    night: 0.0,
+    star: 0.0,
+    bloom: 0.30,
+    ray_: 0.34,
+    grade: C(0xffd9b0),
+    cloud: 0.46
+  },
+];
+
+const SKYST = {
+  elev: 0,
+  turb: 0,
+  ray: 0,
+  mie: 0,
+  mieG: 0,
+  sunI: 0,
+  hemiI: 0,
+  fogD: 0,
+  exp: 0,
+  night: 0,
+  star: 0,
+  bloom: 0,
+  rayS: 0,
+  cloud: 0,
+  name: '',
+  sun: new THREE.Color(),
+  hemiS: new THREE.Color(),
+  hemiG: new THREE.Color(),
+  fog: new THREE.Color(),
+  grade: new THREE.Color(),
+};
+const CYCLE = 180;
+let dayT = 0.02;
+
+function evalSky(t) {
+  t = ((t % 1) + 1) % 1;
+  let i = 0;
+  while (i < KEYS.length - 2 && KEYS[i + 1].t <= t) i++;
+  const a = KEYS[i],
+    b = KEYS[i + 1];
+  const u = smooth(a.t, b.t, t);
+  SKYST.elev = lerp(a.elev, b.elev, u);
+  SKYST.turb = lerp(a.turb, b.turb, u);
+  SKYST.ray = lerp(a.ray, b.ray, u);
+  SKYST.mie = lerp(a.mie, b.mie, u);
+  SKYST.mieG = lerp(a.mieG, b.mieG, u);
+  SKYST.sunI = lerp(a.sunI, b.sunI, u);
+  SKYST.hemiI = lerp(a.hemiI, b.hemiI, u);
+  SKYST.fogD = lerp(a.fogD, b.fogD, u);
+  SKYST.exp = lerp(a.exp, b.exp, u);
+  SKYST.night = lerp(a.night, b.night, u);
+  SKYST.star = lerp(a.star, b.star, u);
+  SKYST.bloom = lerp(a.bloom, b.bloom, u);
+  SKYST.rayS = lerp(a.ray_, b.ray_, u);
+  SKYST.cloud = lerp(a.cloud, b.cloud, u);
+  SKYST.sun.copy(a.sun).lerp(b.sun, u);
+  SKYST.hemiS.copy(a.hemiS).lerp(b.hemiS, u);
+  SKYST.hemiG.copy(a.hemiG).lerp(b.hemiG, u);
+  SKYST.fog.copy(a.fog).lerp(b.fog, u);
+  SKYST.grade.copy(a.grade).lerp(b.grade, u);
+  SKYST.name = u < 0.5 ? a.name : b.name;
+}
+
+const sunDir = new THREE.Vector3();
+const sunPosU = new THREE.Vector3();
+
+function applySky(dt, camPos) {
+  evalSky(dayT);
+  const az = 1.15 + dayT * 0.9;
+  const el = SKYST.elev * Math.PI / 180;
+  sunDir.set(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize();
+
+  const u = sky.material.uniforms;
+  u.turbidity.value = SKYST.turb;
+  u.rayleigh.value = SKYST.ray;
+  u.mieCoefficient.value = SKYST.mie;
+  u.mieDirectionalG.value = SKYST.mieG;
+  u.uNight.value = SKYST.night;
+  u.uGain.value = 1.0;
+  sunPosU.copy(sunDir).multiplyScalar(1000);
+  u.sunPosition.value.copy(sunPosU);
+
+  sky.position.copy(camPos);
+  stars.position.copy(camPos);
+  clouds.position.copy(camPos);
+  starMat.uniforms.uOpacity.value = SKYST.star;
+
+  const cu = cloudMat.uniforms;
+  cu.uTime.value = clock;
+  cu.uSun.value.copy(sunDir);
+  cu.uCover.value = SKYST.cloud;
+  cu.uNight.value = SKYST.night;
+  cu.uSunCol.value.copy(SKYST.sun).multiplyScalar(clamp(SKYST.sunI * 0.26, 0.015, 1.5));
+  cu.uSkyCol.value.copy(SKYST.hemiS).multiplyScalar(0.42);
+  cu.uAmb.value.copy(SKYST.hemiS).multiplyScalar(0.30).lerp(SKYST.fog, 0.35);
+
+
+  const mdir = sunDir.clone().multiplyScalar(-1);
+  mdir.x += 0.22;
+  mdir.y = Math.abs(mdir.y) * 0.85 + 0.12;
+  mdir.normalize();
+  moon.position.copy(camPos).addScaledVector(mdir, 8200);
+  moon.material.opacity = SKYST.star;
+  moonGlow.position.copy(moon.position);
+  moonGlow.material.opacity = SKYST.star * 0.55;
+
+
+  const isNight = SKYST.elev < -2;
+  const lightDir = isNight ? mdir : sunDir;
+  sunLight.color.copy(SKYST.sun);
+  sunLight.intensity = SKYST.sunI;
+  hemi.color.copy(SKYST.hemiS);
+  hemi.groundColor.copy(SKYST.hemiG);
+  hemi.intensity = SKYST.hemiI;
+  ambient.intensity = 0.085 + SKYST.night * 0.03;
+
+  scene.fog.color.copy(SKYST.fog);
+  scene.fog.density = SKYST.fogD;
+  renderer.toneMappingExposure = SKYST.exp;
+  envGround.material.color.copy(SKYST.fog).multiplyScalar(0.32);
+
+  return lightDir;
+}
+
+
+
+
+const carRoot = new THREE.Group();
+const carBody = new THREE.Group();
+carRoot.add(carBody);
+scene.add(carRoot);
+
+const CARCOL = 0xb51226;
+const paintMat = new THREE.MeshPhysicalMaterial({
+      color: CARCOL,
+      metalness: 0.0,
+      roughness: 0.24,
