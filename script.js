@@ -2158,3 +2158,193 @@ function scatterFlush() {
         _S.set(s, s, s);
         _M.compose(_V, _Q, _S);
         IM.grass.setMatrixAt(cnt.grass++, _M);
+      }
+  }
+  IM.pineT.count = cnt.pineT;
+  IM.pineL.count = cnt.pineL;
+  IM.oakT.count = cnt.oakT;
+  IM.oakL.count = cnt.oakL;
+  IM.pineF.count = cnt.pineF;
+  IM.oakF.count = cnt.oakF;
+  IM.rock.count = cnt.rock;
+  IM.grass.count = cnt.grass;
+  for (const k in IM) {
+    IM[k].instanceMatrix.needsUpdate = true;
+    if (IM[k].instanceColor) IM[k].instanceColor.needsUpdate = true;
+  }
+}
+
+
+
+
+const sky = new Sky();
+sky.scale.setScalar(20000);
+sky.material.uniforms.up.value.set(0, 1, 0);
+
+sky.material.fragmentShader = sky.material.fragmentShader
+  .replace('void main() {',
+    'uniform float uNight;\nuniform float uGain;\nuniform vec3 uNightTop;\nuniform vec3 uNightHor;\nvoid main() {')
+  .replace('gl_FragColor = vec4( retColor, 1.0 );', `
+    float hh = clamp( direction.y*0.5 + 0.5, 0.0, 1.0 );
+    vec3 ncol = mix( uNightHor, uNightTop, pow(hh, 0.55) );
+    vec3 outc = mix( retColor, ncol + retColor*0.30, uNight );
+    gl_FragColor = vec4( outc * uGain, 1.0 );`);
+sky.material.uniforms.uNight = {
+  value: 0.0
+};
+sky.material.uniforms.uGain = {
+  value: 1.0
+};
+sky.material.uniforms.uNightTop = {
+  value: new THREE.Color(0.0035, 0.0062, 0.0175)
+};
+sky.material.uniforms.uNightHor = {
+  value: new THREE.Color(0.0120, 0.0155, 0.0290)
+};
+sky.renderOrder = -3;
+sky.frustumCulled = false;
+scene.add(sky);
+
+
+const STAR_N = 7200;
+const starGeo = new THREE.BufferGeometry();
+{
+  const p = new Float32Array(STAR_N * 3),
+    c = new Float32Array(STAR_N * 3),
+    sz = new Float32Array(STAR_N);
+  const bandN = new THREE.Vector3(0.42, 0.60, -0.68).normalize();
+  const tmp = new THREE.Vector3();
+  for (let i = 0; i < STAR_N; i++) {
+    let ok = false,
+      tries = 0;
+    do {
+      const u = hash1(i * 3 + tries * 911) * 2 - 1,
+        th = hash1(i * 7 + tries * 733) * TAU;
+      const r = Math.sqrt(Math.max(0, 1 - u * u));
+      tmp.set(r * Math.cos(th), Math.abs(u) * 0.98 + 0.02, r * Math.sin(th));
+      const band = 1 - Math.abs(tmp.dot(bandN));
+      ok = hash1(i * 13 + tries * 577) < 0.20 + Math.pow(band, 26) * 0.95;
+      tries++;
+    } while (!ok && tries < 9);
+
+
+    tmp.normalize().multiplyScalar(15000);
+    p[i * 3] = tmp.x;
+    p[i * 3 + 1] = tmp.y;
+    p[i * 3 + 2] = tmp.z;
+
+    const mag = Math.pow(hash1(i * 23), 3.2);
+    const col = new THREE.Color().setHSL(0.56 + (hash1(i * 19) - 0.5) * 0.17, 0.34, 0.55 + mag * 0.42);
+    const b = 0.30 + mag * 0.95;
+    c[i * 3] = col.r * b;
+    c[i * 3 + 1] = col.g * b;
+    c[i * 3 + 2] = col.b * b;
+    sz[i] = 1.7 + mag * 4.0;
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  starGeo.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+}
+const starMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uOpacity: {
+      value: 0
+    },
+    uTime: {
+      value: 0
+    },
+    uTex: {
+      value: softSprite
+    },
+    uPx: {
+      value: 1
+    }
+  },
+  transparent: true,
+  depthWrite: false,
+  depthTest: true,
+  blending: THREE.AdditiveBlending,
+  vertexShader: `
+    attribute float aSize; varying vec3 vC; varying float vTw;
+    uniform float uTime; uniform float uPx;
+    void main(){
+      vC = color;
+      vec4 mv = modelViewMatrix * vec4(position,1.0);
+      gl_Position = projectionMatrix * mv;
+      float ph = position.x*0.013 + position.z*0.007;
+      vTw = 0.72 + 0.28*sin(uTime*2.1 + ph);
+      gl_PointSize = aSize * vTw * uPx;
+    }`,
+  fragmentShader: `
+    uniform float uOpacity;
+    varying vec3 vC; varying float vTw;
+    void main(){
+      
+      vec2 d = gl_PointCoord - 0.5;
+      float a = exp(-dot(d,d)*26.0);
+      gl_FragColor = vec4(vC * vTw * 2.6, a*uOpacity);
+    }`,
+  vertexColors: true,
+});
+const stars = new THREE.Points(starGeo, starMat);
+stars.renderOrder = -2;
+stars.frustumCulled = false;
+scene.add(stars);
+
+
+
+
+
+const cloudMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      fog: false,
+      side: THREE.BackSide,
+      blending: THREE.NormalBlending,
+      uniforms: {
+        uTime: {
+          value: 0
+        },
+        uSun: {
+          value: new THREE.Vector3(0, 1, 0)
+        },
+        uSunCol: {
+          value: new THREE.Color(1, 0.8, 0.6)
+        },
+        uSkyCol: {
+          value: new THREE.Color(0.4, 0.5, 0.7)
+        },
+        uAmb: {
+          value: new THREE.Color(0.3, 0.34, 0.42)
+        },
+        uCover: {
+          value: 0.50
+        },
+        uOpacity: {
+          value: 1.0
+        },
+        uNight: {
+          value: 0.0
+        },
+      },
+      vertexShader: `varying vec3 vDir;
+    void main(){
+      vDir = normalize(position);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      gl_Position.z = gl_Position.w;                  
+    }`,
+      fragmentShader: `
+    varying vec3 vDir;
+    uniform float uTime, uCover, uOpacity, uNight;
+    uniform vec3 uSun, uSunCol, uSkyCol, uAmb;
+
+    vec2 h2(vec2 p){
+      p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
+      return fract(sin(p)*43758.5453)*2.0-1.0;
+    }
+    float vn(vec2 p){
+      vec2 i=floor(p), f=fract(p);
+      vec2 u=f*f*(3.0-2.0*f);
+      return mix(mix(dot(h2(i+vec2(0,0)),f-vec2(0,0)), dot(h2(i+vec2(1,0)),f-vec2(1,0)), u.x),
+                 mix(dot(h2(i+vec2(0,1)),f-vec2(0,1)), dot(h2(i+vec2(1,1)),f-vec2(1,1)), u.x), u.y);
