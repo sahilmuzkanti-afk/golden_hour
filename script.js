@@ -1985,3 +1985,176 @@ function scatterTile(key, mesh, tx, tz, size) {
 
 
       const nearOK = lerp(17.0, 8.2, can);
+
+
+
+
+
+      const wantTree = d > nearOK && pick < forest * 0.86;
+      const wantRock = !wantTree && pick > 0.972;
+      const wantGrass = d < 34 && d > 7.4;
+      if (wantTree || wantRock) {
+        const e = 2.2;
+        const hx = (terrainHeight(x + e, z, corr) - terrainHeight(x - e, z, corr)) / (2 * e);
+        const hz = (terrainHeight(x, z + e, corr) - terrainHeight(x, z - e, corr)) / (2 * e);
+        const slope = Math.hypot(hx, hz);
+        if (wantTree && slope < 1.05) {
+          const y = terrainHeight(x, z, corr);
+          const isPine = hash1(seed * 11) < 0.58 + stand * 0.34;
+          const sc = ((isPine ? 0.68 : 0.62) + Math.pow(hash1(seed * 13), 0.8) * 1.25) * (0.92 + can * 0.34);
+          const rot = hash1(seed * 17) * TAU;
+          (isPine ? out.pine : out.oak).push(x, y - 0.15, z, sc, rot);
+        } else if (wantRock && slope < 1.5) {
+          const y = terrainHeight(x, z, corr);
+          const sc = 0.35 + hash1(seed * 19) * 1.15;
+          out.rock.push(x, y - sc * 0.22, z, sc, hash1(seed * 23) * TAU);
+        }
+      }
+      if (wantGrass) {
+        for (let gI = 0; gI < 3; gI++) {
+          const gh = hash1(seed * 31 + gI * 7);
+          if (gh > 0.50 + can * 0.46) continue;
+          const gx = x + (hash1(seed * 37 + gI) - 0.5) * step;
+          const gz = z + (hash1(seed * 41 + gI) - 0.5) * step;
+          const gq = nearestRoad(gx, gz, 50);
+          if (gq.d < 7.2 || gq.d > 36) continue;
+
+          out.grass.push(gx, terrainHeight(gx, gz) - 0.06, gz,
+            (0.55 + hash1(seed * 43 + gI) * 0.85) * (0.85 + can * 0.55),
+            hash1(seed * 47 + gI) * TAU);
+        }
+      }
+    }
+  out.cx = (tx + 0.5) * size;
+  out.cz = (tz + 0.5) * size;
+  scatterStore.set(key, out);
+  scatterDirty = true;
+}
+
+function scatterDrop(key) {
+  if (scatterStore.delete(key)) scatterDirty = true;
+}
+
+function scatterReset() {
+  scatterStore.clear();
+  scatterDirty = true;
+}
+
+let scatterDirty = false;
+const _M = new THREE.Matrix4(),
+  _Q = new THREE.Quaternion(),
+  _E = new THREE.Euler(),
+  _V = new THREE.Vector3(),
+  _S = new THREE.Vector3();
+
+
+
+let LOD_NEAR = 165,
+  grassStride = 1,
+  rockStride = 1;
+let lodCX = 1e9,
+  lodCZ = 1e9,
+  lodSig = 0;
+
+function nearSig(x, z) {
+  const R = LOD_NEAR + RINGS[0].size * 0.71,
+    R2 = R * R;
+  let h = 0;
+  for (const st of scatterStore.values()) {
+    const dx = st.cx - x,
+      dz = st.cz - z;
+    if (dx * dx + dz * dz < R2) h = (h * 31 + (st.cx * 7 + st.cz * 13)) | 0;
+  }
+  return h;
+}
+
+
+function lodCheck(x, z) {
+  lodCX = x;
+  lodCZ = z;
+  const s = nearSig(x, z);
+  if (s !== lodSig) {
+    lodSig = s;
+    scatterDirty = true;
+  }
+}
+
+function scatterFlush() {
+  scatterDirty = false;
+  lodSig = nearSig(lodCX, lodCZ);
+  const cnt = {
+    pineT: 0,
+    pineL: 0,
+    oakT: 0,
+    oakL: 0,
+    pineF: 0,
+    oakF: 0,
+    rock: 0,
+    grass: 0
+  };
+  const R2 = LOD_NEAR * LOD_NEAR,
+    TILE_R = RINGS[0].size * 0.71;
+  for (const st of scatterStore.values()) {
+
+
+    const dx = st.cx - lodCX,
+      dz = st.cz - lodCZ;
+    const near = (Math.hypot(dx, dz) - TILE_R) < LOD_NEAR;
+    for (let i = 0; i < st.pine.length; i += 5) {
+      _V.set(st.pine[i], st.pine[i + 1], st.pine[i + 2]);
+
+      _E.set(Math.sin(st.pine[i] * 0.7) * 0.035, st.pine[i + 4], Math.cos(st.pine[i + 2] * 0.9) * 0.035);
+      _Q.setFromEuler(_E);
+      const s = st.pine[i + 3];
+      _S.set(s, s * (0.85 + ((i * 7) % 13) / 26), s);
+      _M.compose(_V, _Q, _S);
+      const tint = leafTint(st.pine[i] * 3.1 + st.pine[i + 2] * 7.7);
+      if (near && cnt.pineT < CAP.pineT) {
+        IM.pineL.setColorAt(cnt.pineL, tint);
+        IM.pineT.setMatrixAt(cnt.pineT++, _M);
+        IM.pineL.setMatrixAt(cnt.pineL++, _M);
+      } else if (cnt.pineF < CAP.pineF) {
+        IM.pineF.setColorAt(cnt.pineF, tint);
+        IM.pineF.setMatrixAt(cnt.pineF++, _M);
+      }
+    }
+    for (let i = 0; i < st.oak.length; i += 5) {
+      _V.set(st.oak[i], st.oak[i + 1], st.oak[i + 2]);
+      _E.set(Math.sin(st.oak[i] * 0.5) * 0.045, st.oak[i + 4], Math.cos(st.oak[i + 2] * 0.6) * 0.045);
+      _Q.setFromEuler(_E);
+      const s = st.oak[i + 3];
+      _S.set(s, s, s);
+      _M.compose(_V, _Q, _S);
+      const tint = leafTint(st.oak[i] * 5.3 + st.oak[i + 2] * 2.9 + 41);
+      if (near && cnt.oakT < CAP.oakT) {
+        IM.oakL.setColorAt(cnt.oakL, tint);
+        IM.oakT.setMatrixAt(cnt.oakT++, _M);
+        IM.oakL.setMatrixAt(cnt.oakL++, _M);
+      } else if (cnt.oakF < CAP.oakF) {
+        IM.oakF.setColorAt(cnt.oakF, tint);
+        IM.oakF.setMatrixAt(cnt.oakF++, _M);
+      }
+    }
+    for (let i = 0; i < st.rock.length; i += 5 * rockStride) {
+      if (cnt.rock >= CAP.rock) break;
+      _V.set(st.rock[i], st.rock[i + 1], st.rock[i + 2]);
+      _E.set(0, st.rock[i + 4], 0);
+      _Q.setFromEuler(_E);
+      const s = st.rock[i + 3];
+      _S.set(s * 1.3, s, s * 1.15);
+      const g = 0.44 + hash1(st.rock[i] * 3.7 + st.rock[i + 2]) * 0.42;
+      IM.rock.setColorAt(cnt.rock, _RC.setRGB(g * 1.02, g * 0.99, g * 0.94));
+      _M.compose(_V, _Q, _S);
+      IM.rock.setMatrixAt(cnt.rock++, _M);
+    }
+
+    if (near)
+      for (let i = 0; i < st.grass.length; i += 5 * grassStride) {
+        if (cnt.grass >= CAP.grass) break;
+        _V.set(st.grass[i], st.grass[i + 1], st.grass[i + 2]);
+        _E.set(0, st.grass[i + 4], 0);
+        _Q.setFromEuler(_E);
+        const s = st.grass[i + 3];
+        _S.set(s, s, s);
+        _M.compose(_V, _Q, _S);
+        IM.grass.setMatrixAt(cnt.grass++, _M);
