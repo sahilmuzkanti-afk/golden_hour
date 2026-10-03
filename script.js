@@ -1459,18 +1459,18 @@ const leafMat = new THREE.MeshStandardMaterial({
   side: THREE.DoubleSide
 });
 const leafPatch = sh => {
-    sh.uniforms.uTime = {
-      value: 0
-    };
-    sh.uniforms.uSunDir = {
-      value: new THREE.Vector3(0, 1, 0)
-    };
-    sh.uniforms.uSunCol = {
-      value: new THREE.Color(0, 0, 0)
-    };
-    leafMat.userData.sh = sh;
-    sh.vertexShader = 'uniform float uTime;\nvarying float vCanY;\nvarying vec3 vObj;\nvarying vec3 vWPos;\n' + sh.vertexShader.replace(
-        '#include <begin_vertex>', `#include <begin_vertex>
+  sh.uniforms.uTime = {
+    value: 0
+  };
+  sh.uniforms.uSunDir = {
+    value: new THREE.Vector3(0, 1, 0)
+  };
+  sh.uniforms.uSunCol = {
+    value: new THREE.Color(0, 0, 0)
+  };
+  leafMat.userData.sh = sh;
+  sh.vertexShader = 'uniform float uTime;\nvarying float vCanY;\nvarying vec3 vObj;\nvarying vec3 vWPos;\n' + sh.vertexShader.replace(
+      '#include <begin_vertex>', `#include <begin_vertex>
       #ifdef USE_INSTANCING
         float ph = instanceMatrix[3].x*0.6 + instanceMatrix[3].z*0.4;
       #else
@@ -1480,3 +1480,164 @@ const leafPatch = sh => {
       vCanY = clamp(hgt/7.0, 0.0, 1.0);
       vObj  = position;
       transformed.x += sin(uTime*1.05 + ph)*0.035*hgt;
+      transformed.z += cos(uTime*0.83 + ph*1.3)*0.028*hgt;`)
+    .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      #ifdef USE_INSTANCING
+        vWPos = (modelMatrix * instanceMatrix * vec4(transformed,1.0)).xyz;
+      #else
+        vWPos = (modelMatrix * vec4(transformed,1.0)).xyz;
+      #endif`);
+
+  sh.fragmentShader = 'varying float vCanY;\nvarying vec3 vObj;\nvarying vec3 vWPos;\n' +
+    'uniform vec3 uSunDir;\nuniform vec3 uSunCol;\n' +
+    'float lh3(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }\n' +
+    `float vn3(vec3 p){
+       vec3 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+       float a=mix(lh3(i),             lh3(i+vec3(1,0,0)), f.x);
+       float b=mix(lh3(i+vec3(0,1,0)), lh3(i+vec3(1,1,0)), f.x);
+       float c=mix(lh3(i+vec3(0,0,1)), lh3(i+vec3(1,0,1)), f.x);
+       float d=mix(lh3(i+vec3(0,1,1)), lh3(i+vec3(1,1,1)), f.x);
+       return mix(mix(a,b,f.y), mix(c,d,f.y), f.z);
+     }\n` +
+    sh.fragmentShader.replace(
+      '#include <color_fragment>', `#include <color_fragment>
+      diffuseColor.rgb *= mix(0.42, 1.12, pow(vCanY, 0.85));
+      
+
+
+
+
+
+      
+      
+      float rad   = length(vObj.xz) * 0.40 + abs(vObj.y - 4.2) * 0.14;
+      float clump = vn3(vObj * 1.7) * 0.62 + vn3(vObj * 5.1) * 0.38;
+      if(clump < smoothstep(1.00, 1.55, rad) * 0.42) discard;`)
+    .replace('#include <opaque_fragment>', `
+      
+
+
+      vec3 vDir = normalize(vWPos - cameraPosition);
+      float back = pow(max(dot(vDir, -uSunDir), 0.0), 3.4);
+      outgoingLight += diffuseColor.rgb * uSunCol * back * 2.6 * (0.35 + 0.65*vCanY);
+      #include <opaque_fragment>`);
+};
+softCutout(leafMat, leafPatch);
+leafMat.customProgramCacheKey = () => 'leaf-sway';
+
+
+
+
+
+function roughen(g, amp, freq, seed) {
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i),
+      y = p.getY(i),
+      z = p.getZ(i);
+    const r = Math.hypot(x, z);
+    const n = vnoise(x * freq + seed, z * freq - seed) + 0.5 * vnoise(y * freq * 1.7 - seed, x * freq * 1.7 + seed);
+    const k = 1 + n * amp;
+    p.setXYZ(i, x * k, y * (1 + n * amp * 0.35), z * k);
+    if (r < 1e-4) p.setXYZ(i, x, y * (1 + n * amp * 0.5), z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+
+
+function canopyNormals(g, cy, upBias) {
+  const p = g.attributes.position,
+    n = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i),
+      y = p.getY(i) - cy,
+      z = p.getZ(i);
+    const L = Math.hypot(x, y, z) || 1;
+    x /= L;
+    y /= L;
+    z /= L;
+    y += upBias;
+    const M = Math.hypot(x, y, z) || 1;
+    n.setXYZ(i, x / M, y / M, z / M);
+  }
+  n.needsUpdate = true;
+  return g;
+}
+
+
+const G_trunk_pine = (() => {
+  const g = new THREE.CylinderGeometry(0.09, 0.27, 2.6, 6, 1, true);
+  g.translate(0, 1.3, 0);
+  return g;
+})();
+const G_leaf_pine = (() => {
+  const l = [];
+
+
+  const spec = [
+    [1.85, 2.05],
+    [2.85, 1.86],
+    [3.80, 1.55],
+    [4.65, 1.20],
+    [5.35, 0.84],
+    [5.95, 0.48]
+  ];
+  let k = 0;
+  for (const [y, r] of spec) {
+
+
+    const cnt = Math.max(5, Math.round(r * 5.2));
+    for (let i = 0; i < cnt; i++) {
+      const a = (i / cnt) * TAU + k * 0.83 + hash1(k * 31 + i * 7) * 0.55;
+      const s = r * (1.54 + hash1(k * 17 + i * 3) * 0.46);
+      const q = leafUV(new THREE.PlaneGeometry(s, s * 0.80), LEAF_NEEDLE);
+      q.rotateX(0.62 + hash1(k * 11 + i) * 0.30);
+      q.rotateY(a);
+      q.translate(Math.sin(a) * r * 0.52, y + (hash1(k * 23 + i) - 0.5) * 0.24, Math.cos(a) * r * 0.52);
+      l.push(q);
+    }
+    k++;
+  }
+  return canopyNormals(mergeGeos(l), 3.6, 0.55);
+})();
+const G_trunk_oak = (() => {
+  const l = [];
+  const t = new THREE.CylinderGeometry(0.15, 0.36, 2.9, 6, 1, true);
+  t.translate(0, 1.45, 0);
+  l.push(t);
+  for (const [a, ln] of [
+      [0.7, 1.5],
+      [2.5, 1.3],
+      [4.6, 1.4]
+    ]) {
+    const b = new THREE.CylinderGeometry(0.07, 0.13, ln, 4, 1, true);
+    b.translate(0, ln * 0.5, 0);
+    b.rotateX(0.55);
+    b.rotateY(a);
+    b.translate(0, 2.5, 0);
+    l.push(b);
+  }
+  return mergeGeos(l);
+})();
+const G_leaf_oak = (() => {
+      const l = [];
+      const CY = 4.25,
+        RX = 2.95,
+        RY = 1.95,
+        RZ = 2.85;
+
+
+      for (let i = 0; i < 58; i++) {
+        const u = hash1(i * 7.1 + 3),
+          v = hash1(i * 13.3 + 5),
+          w = hash1(i * 19.7 + 11);
+        const th = u * TAU,
+          ph = Math.acos(2 * v - 1),
+          rr = 0.46 + 0.54 * Math.sqrt(w);
+        const x = Math.sin(ph) * Math.cos(th) * RX * rr;
+        const y = Math.cos(ph) * RY * rr;
+        const z = Math.sin(ph) * Math.sin(th) * RZ * rr;
+        const s = 1.04 + hash1(i * 29.1 + 7) * 1.06;
+        const q = leafUV(new THREE.PlaneGeometry(s, s * 0.86), LEAF_BROAD);
