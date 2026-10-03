@@ -2296,45 +2296,45 @@ scene.add(stars);
 
 
 const cloudMat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      fog: false,
-      side: THREE.BackSide,
-      blending: THREE.NormalBlending,
-      uniforms: {
-        uTime: {
-          value: 0
-        },
-        uSun: {
-          value: new THREE.Vector3(0, 1, 0)
-        },
-        uSunCol: {
-          value: new THREE.Color(1, 0.8, 0.6)
-        },
-        uSkyCol: {
-          value: new THREE.Color(0.4, 0.5, 0.7)
-        },
-        uAmb: {
-          value: new THREE.Color(0.3, 0.34, 0.42)
-        },
-        uCover: {
-          value: 0.50
-        },
-        uOpacity: {
-          value: 1.0
-        },
-        uNight: {
-          value: 0.0
-        },
-      },
-      vertexShader: `varying vec3 vDir;
+  transparent: true,
+  depthWrite: false,
+  depthTest: true,
+  fog: false,
+  side: THREE.BackSide,
+  blending: THREE.NormalBlending,
+  uniforms: {
+    uTime: {
+      value: 0
+    },
+    uSun: {
+      value: new THREE.Vector3(0, 1, 0)
+    },
+    uSunCol: {
+      value: new THREE.Color(1, 0.8, 0.6)
+    },
+    uSkyCol: {
+      value: new THREE.Color(0.4, 0.5, 0.7)
+    },
+    uAmb: {
+      value: new THREE.Color(0.3, 0.34, 0.42)
+    },
+    uCover: {
+      value: 0.50
+    },
+    uOpacity: {
+      value: 1.0
+    },
+    uNight: {
+      value: 0.0
+    },
+  },
+  vertexShader: `varying vec3 vDir;
     void main(){
       vDir = normalize(position);
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
       gl_Position.z = gl_Position.w;                  
     }`,
-      fragmentShader: `
+  fragmentShader: `
     varying vec3 vDir;
     uniform float uTime, uCover, uOpacity, uNight;
     uniform vec3 uSun, uSunCol, uSkyCol, uAmb;
@@ -2348,3 +2348,231 @@ const cloudMat = new THREE.ShaderMaterial({
       vec2 u=f*f*(3.0-2.0*f);
       return mix(mix(dot(h2(i+vec2(0,0)),f-vec2(0,0)), dot(h2(i+vec2(1,0)),f-vec2(1,0)), u.x),
                  mix(dot(h2(i+vec2(0,1)),f-vec2(0,1)), dot(h2(i+vec2(1,1)),f-vec2(1,1)), u.x), u.y);
+    }
+    float fbm(vec2 p){
+      float s=0.0, a=0.5;
+      mat2 R = mat2(0.80,0.60,-0.60,0.80);
+      for(int i=0;i<6;i++){ s += a*vn(p); p = R*p*2.03; a*=0.5; }
+      return s;
+    }
+    
+    float dens(vec3 d, float t){
+      vec2 uv = d.xz / max(d.y, 0.055) * 0.55;
+      uv += vec2(t*0.0075, t*0.0032);
+      float f = fbm(uv*0.85);
+      f += 0.42*fbm(uv*2.7 + vec2(-t*0.012, t*0.006));
+      float c = smoothstep(0.62 - uCover*0.62, 1.02 - uCover*0.52, f + 0.5);
+      return clamp(c, 0.0, 1.0);
+    }
+
+    void main(){
+      vec3 d = normalize(vDir);
+      if(d.y < 0.008){ discard; }
+      float a = dens(d, uTime);
+      if(a < 0.004){ discard; }
+
+      
+      float sh = 0.0;
+      vec3 sd = normalize(uSun);
+      for(int i=1;i<=4;i++){
+        vec3 q = normalize(d + sd*(float(i)*0.055));
+        sh += dens(q, uTime);
+      }
+      sh = clamp(sh*0.25, 0.0, 1.0);
+
+      float lit  = pow(1.0 - sh, 1.9);
+      float fw   = pow(max(dot(d, sd), 0.0), 7.0);        
+      vec3  col  = uAmb * (0.35 + 0.30*(1.0-sh))
+                 + uSunCol * (lit*0.95 + fw*1.25*lit)
+                 + uSkyCol * 0.22;
+      col = mix(col, uAmb*0.55, uNight*0.85);
+
+      
+      float horiz = smoothstep(0.0, 0.26, d.y); horiz *= horiz;
+      float top   = 1.0 - smoothstep(0.55, 1.0, d.y)*0.35;
+      gl_FragColor = vec4(col, a*horiz*top*uOpacity);
+    }`
+});
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 28), cloudMat);
+clouds.scale.setScalar(120);
+clouds.renderOrder = -2.5;
+clouds.frustumCulled = false;
+scene.add(clouds);
+
+
+const moon = new THREE.Mesh(
+  new THREE.SphereGeometry(90, 24, 16),
+  new THREE.MeshBasicMaterial({
+    color: 0xdfe7f5,
+    fog: false,
+    transparent: true,
+    opacity: 0
+  })
+);
+moon.renderOrder = -1;
+moon.frustumCulled = false;
+scene.add(moon);
+const moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: softSprite,
+  color: 0xb8cbe8,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  depthTest: true,
+  fog: false
+}));
+moonGlow.scale.setScalar(1100);
+moonGlow.renderOrder = -1;
+scene.add(moonGlow);
+
+
+const sunLight = new THREE.DirectionalLight(0xffffff, 3);
+sunLight.castShadow = true;
+
+
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 420;
+sunLight.shadow.bias = -0.0006;
+sunLight.shadow.normalBias = 0.055;
+{
+  const d = 62;
+  const c = sunLight.shadow.camera;
+  c.left = -d;
+  c.right = d;
+  c.top = d;
+  c.bottom = -d;
+  c.updateProjectionMatrix();
+}
+scene.add(sunLight);
+scene.add(sunLight.target);
+
+const hemi = new THREE.HemisphereLight(0xffd9a0, 0x5b4a30, 0.6);
+scene.add(hemi);
+const ambient = new THREE.AmbientLight(0xffffff, 0.05);
+scene.add(ambient);
+
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+const envScene = new THREE.Scene();
+const skyEnv = new THREE.Mesh(sky.geometry, sky.material);
+skyEnv.scale.setScalar(4000);
+envScene.add(skyEnv);
+const envGround = new THREE.Mesh(
+  new THREE.SphereGeometry(3000, 16, 8, 0, TAU, Math.PI / 2, Math.PI / 2),
+  new THREE.MeshBasicMaterial({
+    side: THREE.BackSide,
+    color: 0x2a2418
+  })
+);
+envScene.add(envGround);
+let envRT = null,
+  envTimer = 99;
+
+function bakeEnv() {
+
+
+  const tm = renderer.toneMapping;
+  renderer.toneMapping = THREE.NoToneMapping;
+  skyCam.update(renderer, envScene);
+  renderer.toneMapping = tm;
+
+
+
+
+  envRT = pmrem.fromCubemap(skyRT.texture, envRT);
+  scene.environment = envRT.texture;
+}
+
+
+const C = h => new THREE.Color().setHex(h, THREE.SRGBColorSpace);
+const KEYS = [
+
+
+
+
+
+    {
+      t: 0.00,
+      name: 'Golden Hour',
+      elev: 9.5,
+      turb: 5.0,
+      ray: 2.30,
+      mie: 0.0060,
+      mieG: 0.86,
+      sun: C(0xffc27a),
+      sunI: 3.8,
+      hemiS: C(0xffd6a4),
+      hemiG: C(0x8c6e48),
+      hemiI: 0.58,
+      fog: C(0xf0b478),
+      fogD: 0.00032,
+      exp: 0.90,
+      night: 0.0,
+      star: 0.0,
+      bloom: 0.30,
+      ray_: 0.34,
+      grade: C(0xffd9b0),
+      cloud: 0.46
+    },
+    {
+      t: 0.13,
+      name: 'Golden Hour',
+      elev: 4.2,
+      turb: 6.2,
+      ray: 2.85,
+      mie: 0.0075,
+      mieG: 0.875,
+      sun: C(0xffa658),
+      sunI: 3.9,
+      hemiS: C(0xffc593),
+      hemiG: C(0x7c6140),
+      hemiI: 0.55,
+      fog: C(0xeda269),
+      fogD: 0.00042,
+      exp: 0.95,
+      night: 0.0,
+      star: 0.0,
+      bloom: 0.42,
+      ray_: 0.58,
+      grade: C(0xffd2a4),
+      cloud: 0.5
+    },
+    {
+      t: 0.22,
+      name: 'Sunset',
+      elev: 0.4,
+      turb: 8.6,
+      ray: 3.60,
+      mie: 0.0102,
+      mieG: 0.895,
+      sun: C(0xff7434),
+      sunI: 3.7,
+      hemiS: C(0xff9463),
+      hemiG: C(0x674934),
+      hemiI: 0.46,
+      fog: C(0xe07a44),
+      fogD: 0.00058,
+      exp: 1.04,
+      night: 0.0,
+      star: 0.02,
+      bloom: 0.86,
+      ray_: 1.55,
+      grade: C(0xffc79a),
+      cloud: 0.56
+    },
+    {
+      t: 0.30,
+      name: 'Dusk',
+      elev: -3.4,
+      turb: 7.0,
+      ray: 3.30,
+      mie: 0.0088,
+      mieG: 0.878,
+      sun: C(0xb0608c),
+      sunI: 1.30,
+      hemiS: C(0x8f6f9e),
+      hemiG: C(0x453648),
+      hemiI: 0.40,
