@@ -2875,6 +2875,209 @@ scene.add(carRoot);
 
 const CARCOL = 0xb51226;
 const paintMat = new THREE.MeshPhysicalMaterial({
-      color: CARCOL,
-      metalness: 0.0,
-      roughness: 0.24,
+  color: CARCOL,
+  metalness: 0.0,
+  roughness: 0.24,
+  clearcoat: 1.0,
+  clearcoatRoughness: 0.045,
+  envMapIntensity: 1.5,
+  sheen: 0.25,
+  sheenColor: new THREE.Color(0xff9090),
+});
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color: 0x0a1016,
+  metalness: 0.0,
+  roughness: 0.055,
+  clearcoat: 1.0,
+  clearcoatRoughness: 0.03,
+  transparent: true,
+  opacity: 0.80,
+  envMapIntensity: 2.4,
+  side: THREE.DoubleSide,
+});
+const trimMat = new THREE.MeshStandardMaterial({
+  color: 0x14161a,
+  roughness: 0.42,
+  metalness: 0.55,
+  envMapIntensity: 0.9
+});
+const carbonMat = new THREE.MeshPhysicalMaterial({
+  color: 0x0d0f12,
+  roughness: 0.32,
+  metalness: 0.25,
+  clearcoat: 0.85,
+  clearcoatRoughness: 0.14,
+  envMapIntensity: 1.1
+});
+
+
+const aeroMat = new THREE.MeshStandardMaterial({
+  color: 0x090a0d,
+  roughness: 0.72,
+  metalness: 0.05,
+  envMapIntensity: 0.22
+});
+const chromeMat = new THREE.MeshStandardMaterial({
+  color: 0xd8dde3,
+  roughness: 0.16,
+  metalness: 1.0,
+  envMapIntensity: 1.6
+});
+const tyreMat = new THREE.MeshStandardMaterial({
+  color: 0x0b0b0d,
+  roughness: 0.90,
+  metalness: 0.0,
+  envMapIntensity: 0.28
+});
+
+
+
+
+
+const rimMat = new THREE.MeshStandardMaterial({
+  color: 0x767d86,
+  roughness: 0.38,
+  metalness: 0.78,
+  envMapIntensity: 1.05
+});
+
+
+
+const rimBackMat = new THREE.MeshStandardMaterial({
+  color: 0x14161a,
+  roughness: 0.85,
+  metalness: 0.2,
+  envMapIntensity: 0.25
+});
+
+
+
+const rotorMat = new THREE.MeshStandardMaterial({
+  color: 0x4a4744,
+  roughness: 0.62,
+  metalness: 0.55,
+  envMapIntensity: 0.5
+});
+const caliperMat = new THREE.MeshStandardMaterial({
+  color: 0xd8402a,
+  roughness: 0.42,
+  metalness: 0.35,
+  emissive: 0x220000,
+  envMapIntensity: 0.8
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+let HILITE_KNEE = {
+  value: 2.6
+};
+
+function tameHighlights(mat, extra) {
+  mat.onBeforeCompile = fogPatch(sh => {
+    if (extra) extra(sh);
+    sh.uniforms.uKnee = HILITE_KNEE;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('void main() {', 'uniform float uKnee;\nvoid main() {')
+      .replace('#include <opaque_fragment>', `
+        #include <opaque_fragment>
+        {
+          vec3 hc = gl_FragColor.rgb;
+          float hl = max(max(hc.r, hc.g), hc.b);
+          if(hl > uKnee){
+            float over = hl - uKnee;
+            gl_FragColor.rgb = hc * ((uKnee + over/(1.0 + over/uKnee)) / hl);
+          }
+        }`);
+  });
+  mat.needsUpdate = true;
+}
+[paintMat, carbonMat, chromeMat, trimMat, rimMat, rotorMat].forEach(m => tameHighlights(m));
+
+
+
+
+
+
+
+tameHighlights(glassMat, sh => {
+  sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `
+    #include <color_fragment>
+    if(!gl_FrontFacing){ diffuseColor.a *= 0.18; diffuseColor.rgb *= 2.2; }`);
+});
+glassMat.customProgramCacheKey = () => 'glass-inner';
+
+
+
+
+
+
+
+
+const STATIONS = [
+  [-2.28, 0.34, 0.740, 0.68, 0.420, 0.42, 0.70, 0.880, 0.940],
+  [-2.12, 0.56, 0.910, 0.86, 0.560, 0.34, 0.72, 0.920, 1.000],
+  [-1.86, 0.66, 0.985, 0.93, 0.620, 0.28, 0.78, 0.950, 1.040],
+  [-1.52, 0.68, 0.990, 0.94, 0.630, 0.27, 0.84, 0.975, 1.070],
+  [-1.16, 0.70, 0.990, 0.93, 0.610, 0.27, 0.82, 0.965, 1.120],
+  [-0.76, 0.70, 0.975, 0.89, 0.570, 0.26, 0.77, 0.930, 1.175],
+  [-0.36, 0.69, 0.955, 0.86, 0.545, 0.25, 0.75, 0.900, 1.198],
+  [0.06, 0.69, 0.945, 0.84, 0.535, 0.24, 0.74, 0.885, 1.192],
+  [0.46, 0.69, 0.945, 0.82, 0.510, 0.24, 0.73, 0.865, 1.120],
+  [0.88, 0.69, 0.945, 0.80, 0.450, 0.25, 0.73, 0.845, 0.955],
+  [1.20, 0.66, 0.955, 0.79, 0.470, 0.27, 0.77, 0.835, 0.880],
+  [1.52, 0.64, 0.965, 0.78, 0.490, 0.27, 0.79, 0.830, 0.858],
+  [1.86, 0.60, 0.935, 0.75, 0.470, 0.28, 0.73, 0.775, 0.800],
+  [2.10, 0.52, 0.870, 0.69, 0.430, 0.29, 0.67, 0.700, 0.730],
+  [2.24, 0.36, 0.700, 0.55, 0.330, 0.31, 0.57, 0.590, 0.625],
+  [2.30, 0.17, 0.400, 0.31, 0.160, 0.34, 0.45, 0.480, 0.505],
+];
+
+
+const ARCH = [{
+    z: -1.30,
+    r: 0.70,
+    y: 0.870,
+    w: 0.655
+  },
+  {
+    z: 1.32,
+    r: 0.66,
+    y: 0.800,
+    w: 0.645
+  }
+];
+
+function archAt(z) {
+  let a = 0,
+    y = 0.8,
+    w = 0.66;
+  for (const A of ARCH) {
+    const d = Math.abs(z - A.z) / A.r;
+    if (d < 1) {
+      const v = Math.cos(d * Math.PI * 0.5);
+      if (v > a) {
+        a = v;
+        y = A.y;
+        w = A.w;
+      }
+    }
+  }
+  return {
+    a: a * a * (3 - 2 * a),
+    y,
+    w
+  };
