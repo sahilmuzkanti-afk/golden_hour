@@ -3734,7 +3734,181 @@ const wheels = [];
 const wheelHub = [];
 
 const WPOS = [
-    [0.845, 1.32, WHEEL.fr, WHEEL.fw, true],
-    [-0.845, 1.32, WHEEL.fr, WHEEL.fw, true],
-    [0.860, -1.30, WHEEL.rr, WHEEL.rw, false],
-    [-0.860, -1.30, WHEEL.rr, WHEEL.rw, false],
+  [0.845, 1.32, WHEEL.fr, WHEEL.fw, true],
+  [-0.845, 1.32, WHEEL.fr, WHEEL.fw, true],
+  [0.860, -1.30, WHEEL.rr, WHEEL.rw, false],
+  [-0.860, -1.30, WHEEL.rr, WHEEL.rw, false],
+];
+for (const [x, z, r, w, steer] of WPOS) {
+  const pivot = new THREE.Group();
+  pivot.position.set(x, r, z);
+  const spin = buildWheel(r, w, 10);
+  if (x < 0) spin.rotation.y = Math.PI;
+  pivot.add(spin);
+  carBody.add(pivot);
+  wheelHub.push({
+    pivot,
+    spin,
+    steer,
+    r,
+    x,
+    z
+  });
+  wheels.push(spin);
+}
+
+
+const wellMat = new THREE.MeshStandardMaterial({
+  color: 0x08080a,
+  roughness: 0.96,
+  metalness: 0,
+  side: THREE.BackSide,
+  envMapIntensity: 0.1
+});
+
+
+
+
+
+function wellLiner(z, radius, cy, halfW, width) {
+  const geo = new THREE.CylinderGeometry(radius, radius, width, 14, 1, true,
+    -0.12, Math.PI + 0.24);
+  geo.rotateZ(Math.PI / 2);
+  for (const sgn of [-1, 1]) {
+    const m = new THREE.Mesh(geo, wellMat);
+    m.position.set(sgn * (halfW - width * 0.5), cy, z);
+    carBody.add(m);
+  }
+}
+wellLiner(-1.30, WHEEL.rr + 0.10, WHEEL.rr, bodyX(-1.30, 0.62), 0.46);
+wellLiner(1.32, WHEEL.fr + 0.10, WHEEL.fr, bodyX(1.32, 0.58), 0.40);
+
+
+function box(w, h, d, mat, x, y, z, rx = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.rotation.x = rx;
+  m.castShadow = true;
+  return m;
+}
+
+
+
+function skinStrip(mat, sgn, samples) {
+  const pos = [],
+    idx = [],
+    n = samples.length;
+  for (const s of samples) {
+    const o = s.out ?? 0.006;
+    pos.push(sgn * (bodyX(s.z, s.yT) + o), s.yT, s.z,
+      sgn * (bodyX(s.z, s.yB) + o), s.yB, s.z);
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const a = i * 2,
+      b = i * 2 + 1,
+      c = (i + 1) * 2,
+      d = (i + 1) * 2 + 1;
+    if (sgn > 0) idx.push(a, c, b, b, c, d);
+    else idx.push(a, b, c, b, d, c);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+
+function skinBlade(mat, sgn, z0, z1, yMid, halfH, out, taper = 0.30) {
+  const S = [],
+    N = 9;
+  for (let i = 0; i < N; i++) {
+    const f = i / (N - 1);
+    const z = lerp(z0, z1, f);
+    const w = Math.sin(Math.PI * clamp((f * (1 + taper) - taper * 0.5), 0, 1)) ** 0.55;
+    const h = halfH * Math.max(0.10, w);
+    const yc = yMid + (typeof out === 'function' ? 0 : 0);
+    S.push({
+      z,
+      yT: yc + h,
+      yB: yc - h,
+      out
+    });
+  }
+  return skinStrip(mat, sgn, S);
+}
+
+
+{
+  const zN = 2.08,
+    halfN = bodyX(zN, 0.31);
+  const sp = new THREE.Mesh(new THREE.BoxGeometry(halfN * 1.72, 0.034, 0.34), aeroMat);
+  sp.position.set(0, 0.162, zN);
+  sp.rotation.x = 0.06;
+  sp.castShadow = true;
+  carBody.add(sp);
+  for (const sgn of [-1, 1])
+    carBody.add(box(0.028, 0.075, 0.22, aeroMat, sgn * (halfN * 0.72), 0.200, zN - 0.02));
+}
+
+for (const sgn of [-1, 1]) {
+  const sk = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.10, 1.66), aeroMat);
+  sk.position.set(sgn * (bodyX(0.02, 0.30) - 0.018), 0.288, 0.02);
+  sk.castShadow = true;
+  carBody.add(sk);
+}
+
+{
+  const halfR = bodyX(-2.06, 0.34);
+  carBody.add(box(halfR * 1.90, 0.12, 0.40, aeroMat, 0, 0.245, -2.08));
+  for (let i = -2; i <= 2; i++)
+    carBody.add(box(0.034, 0.165, 0.38, aeroMat, i * halfR * 0.42, 0.290, -2.07));
+}
+
+{
+  const SPAN = 1.40,
+    deck = bodyTop(-1.94);
+  const s = new THREE.Shape();
+  s.moveTo(-0.175, 0);
+  s.quadraticCurveTo(-0.02, 0.052, 0.175, 0.005);
+  s.quadraticCurveTo(-0.02, 0.004, -0.175, 0);
+  const wingGeo = new THREE.ExtrudeGeometry(s, {
+    depth: SPAN,
+    bevelEnabled: false
+  });
+  wingGeo.translate(0, 0, -SPAN * 0.5);
+  wingGeo.rotateY(Math.PI / 2);
+  const wing = new THREE.Mesh(wingGeo, aeroMat);
+  wing.rotation.x = -0.13;
+  wing.position.set(0, deck + 0.115, -1.94);
+  wing.castShadow = true;
+  carBody.add(wing);
+  for (const sgn of [-1, 1]) {
+
+    const pyl = box(0.040, 0.34, 0.14, aeroMat, sgn * 0.615, deck - 0.055, -1.950);
+    pyl.rotation.x = -0.13;
+    carBody.add(pyl);
+    const ep = box(0.015, 0.085, 0.25, aeroMat, sgn * SPAN * 0.5, deck + 0.128, -1.928);
+    ep.rotation.x = -0.13;
+    carBody.add(ep);
+  }
+}
+
+const mirrorGlass = new THREE.MeshStandardMaterial({
+  color: 0x9aa6b4,
+  roughness: 0.06,
+  metalness: 1.0,
+  envMapIntensity: 2.2
+});
+for (const sgn of [-1, 1]) {
+  const y = 0.825,
+    z = 0.88,
+    xs = Math.max(bodyX(z, y), 0.72);
+  const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.023, 0.13, 8), aeroMat);
+  stalk.rotation.z = sgn * (Math.PI / 2 - 0.34);
+  stalk.position.set(sgn * (xs + 0.058), y + 0.022, z);
+  carBody.add(stalk);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.062, 12, 9), aeroMat);
+  cap.scale.set(1.35, 0.92, 0.66);
+  cap.position.set(sgn * (xs + 0.120), y + 0.058, z - 0.008);
+  cap.castShadow = true;
+  carBody.add(cap);
