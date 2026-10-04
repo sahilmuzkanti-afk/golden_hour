@@ -4767,6 +4767,97 @@ function stepPhysics(dt) {
 
   const geoPitch = clamp(Math.atan2(gnd.front - gnd.rear, CARP.lf + CARP.lr), -0.22, 0.22);
   const geoRoll = clamp(Math.atan2(gnd.left - gnd.right, 1.73), -0.20, 0.20);
-  
 
+  const air = car.airT;
+  const pitchT = lerp(
+    geoPitch - clamp(accelLong * 0.0072, -0.09, 0.09),
+    clamp(car.vy * 0.030, -0.15, 0.15),
+    air
+  );
+  const rollT = lerp(geoRoll + clamp(accelLat * 0.0085, -0.12, 0.12), 0, air);
+  car.pitch = damp(car.pitch, pitchT, 9 - air * 4.0, dt);
+  car.roll = damp(car.roll, rollT, 8.5 - air * 4.0, dt);
+  car.rough = damp(car.rough, gnd.rough, 6, dt);
+  car.landImpact = damp(car.landImpact, 0, 6, dt);
+  if (stepHook) stepHook(gnd);
+}
 
+let stepHook = null;
+
+function surfaceAt(s, n) {
+  const f = frameAt(s);
+  const road = roadSurfaceY(f, n);
+  const an = Math.abs(n);
+  if (an <= RD.half + 0.5) return road;
+  const cs = Math.cos(f.h);
+  const sn = Math.sin(f.h);
+  const terrain = terrainHeight(f.x + cs * n, f.z - sn * n);
+  return lerp(road, terrain, smooth(RD.half + 0.5, RD.verge + 3.5, an));
+}
+
+function sampleWheels() {
+  const cy = Math.cos(car.yaw);
+  const sy = Math.sin(car.yaw);
+  let front = 0;
+  let rear = 0;
+  let left = 0;
+  let right = 0;
+  let average = 0;
+  let minimum = Infinity;
+  let maximum = -Infinity;
+  for (let i = 0; i < 4; i++) {
+    const wheel = WPOS[i];
+    const ds = wheel[1] * cy - wheel[0] * sy;
+    const dn = wheel[1] * sy + wheel[0] * cy;
+    const height = surfaceAt(car.s + ds, car.n + dn);
+    if (i < 2) front += height * 0.5;
+    else rear += height * 0.5;
+    if (wheel[0] > 0) left += height * 0.5;
+    else right += height * 0.5;
+    average += height * 0.25;
+    minimum = Math.min(minimum, height);
+    maximum = Math.max(maximum, height);
+  }
+  return {
+    avg: average,
+    front,
+    rear,
+    left,
+    right,
+    min: minimum,
+    max: maximum,
+    rough: clamp((maximum - minimum) * 1.6, 0, 1)
+  };
+}
+
+const milestoneCarPosition = new THREE.Vector3();
+
+function placeMilestoneCar() {
+  const f = frameAt(car.s);
+  roadToWorld(car.s, car.n, milestoneCarPosition);
+  carRoot.position.set(milestoneCarPosition.x, car.y, milestoneCarPosition.z);
+  carRoot.rotation.set(0, f.h + car.yaw, 0);
+  carBody.rotation.set(car.pitch, 0, car.roll + Math.atan(f.b) * Math.cos(car.yaw));
+  return f;
+}
+
+function updateMilestoneWorld() {
+  pathExtendTo(car.s + RD.ahead);
+  pathTrimTo(car.s - RD.behind);
+  if (car.s + RD.ahead > gridBuiltTo - 200 || car.s - RD.behind < gridBuiltFrom - 10) {
+    gridRebuild();
+  }
+  const first = chunkIndexOf(car.s - 300);
+  const last = chunkIndexOf(car.s + 1150);
+  for (let index = first; index <= last; index++) {
+    if (!roadChunks.has(index)) roadChunks.set(index, makeRoadChunk(index));
+  }
+  for (const [index, chunk] of roadChunks) {
+    if (index < first - 1 || index > last + 1) {
+      disposeGroup(chunk.grp);
+      roadChunks.delete(index);
+    }
+  }
+  const f = frameAt(car.s);
+  updateTiles(f.x, f.z);
+}
