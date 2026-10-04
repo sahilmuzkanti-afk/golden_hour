@@ -4122,3 +4122,176 @@ const taillights = [];
 
   const hi = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.022, 0.03), tailMat);
   hi.position.set(0, bodyTop(-1.94) + 0.085, -1.905);
+  carBody.add(hi);
+  taillights.push(hi);
+}
+
+
+
+const tipMat = new THREE.MeshStandardMaterial({
+  color: 0x30343c,
+  roughness: 0.34,
+  metalness: 1.0,
+  envMapIntensity: 0.75
+});
+const boreMat = new THREE.MeshStandardMaterial({
+  color: 0x080809,
+  roughness: 0.95,
+  metalness: 0.0,
+  envMapIntensity: 0.05
+});
+carBody.add(box(1.02, 0.19, 0.06, ductMat, 0, 0.465, -2.295));
+const exhausts = [];
+for (const sgn of [-1, 1])
+  for (const k of [0, 1]) {
+    const x = sgn * (0.150 + k * 0.150),
+      inner = k === 0;
+    const e = new THREE.Mesh(new THREE.CylinderGeometry(
+      inner ? 0.058 : 0.050, inner ? 0.064 : 0.056, 0.20, 14), tipMat);
+    e.rotation.x = Math.PI / 2;
+    e.position.set(x, 0.465, -2.315);
+    carBody.add(e);
+    const bore = new THREE.Mesh(new THREE.CylinderGeometry(
+      inner ? 0.044 : 0.037, inner ? 0.044 : 0.037, 0.07, 12), boreMat);
+    bore.rotation.x = Math.PI / 2;
+    bore.position.set(x, 0.465, -2.352);
+    carBody.add(bore);
+
+    if (inner) exhausts.push(e);
+  }
+
+const flameMat = new THREE.MeshBasicMaterial({
+  color: 0xff8a2a,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  fog: false
+});
+const flames = exhausts.map(e => {
+  const f = new THREE.Mesh(new THREE.ConeGeometry(0.070, 0.78, 10), flameMat.clone());
+  f.rotation.x = Math.PI / 2;
+  f.position.set(e.position.x, e.position.y, -2.80);
+  carBody.add(f);
+  return f;
+});
+
+
+const beamLights = [];
+for (const sgn of [-1, 1]) {
+
+
+  const sp = new THREE.SpotLight(0xfff2dc, 0, 240, 0.50, 0.74, 1.12);
+  sp.position.set(sgn * 0.62, 0.575, 2.10);
+  sp.target.position.set(sgn * 0.30, -2.0, 62);
+  carBody.add(sp);
+  carBody.add(sp.target);
+  beamLights.push(sp);
+}
+
+
+
+const volMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  side: THREE.DoubleSide,
+  fog: false,
+  uniforms: {
+    uOp: {
+      value: 0
+    },
+    uCol: {
+      value: new THREE.Color(0xffeccc)
+    }
+  },
+  vertexShader: `varying vec2 vU; varying vec3 vN; varying vec3 vV; varying vec3 vAx;
+    void main(){
+      vU = uv;
+      vN = normalize(normalMatrix * normal);
+      vAx = normalize(normalMatrix * vec3(0.0,1.0,0.0));   
+      vec4 mv = modelViewMatrix * vec4(position,1.0);
+      vV = normalize(-mv.xyz);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `uniform float uOp; uniform vec3 uCol;
+    varying vec2 vU; varying vec3 vN; varying vec3 vV; varying vec3 vAx;
+    void main(){
+      float t    = clamp(vU.y, 0.0, 1.0);          
+      float d    = 1.0 - t;                        
+      float fall = exp(-d*3.2) * smoothstep(0.0, 0.06, d);
+      float edge = pow(sin(vU.x*3.14159), 0.9);
+      
+      float graze = pow(1.0 - abs(dot(normalize(vN), vV)), 1.5);
+      
+      
+      float axial = abs(dot(normalize(vAx), vV));
+      float side  = 1.0 - pow(axial, 1.4);
+      gl_FragColor = vec4(uCol, uOp*fall*edge*graze*side*0.55);
+    }`
+});
+const volCones = [];
+for (const sgn of [-1, 1]) {
+  const c = new THREE.Mesh(new THREE.ConeGeometry(2.5, 30, 28, 1, true), volMat);
+  c.rotation.x = -Math.PI / 2;
+  c.position.set(sgn * 0.58, 0.44, 2.1 + 15);
+  c.renderOrder = 5;
+  c.frustumCulled = false;
+  carBody.add(c);
+  volCones.push(c);
+}
+
+const glowSprites = [];
+
+function addGlow(x, y, z, color, scale) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: softSprite,
+    color,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    fog: false
+  }));
+  s.scale.setScalar(scale);
+  s.position.set(x, y, z);
+  carBody.add(s);
+  glowSprites.push(s);
+  return s;
+}
+
+
+const glowHead = [addGlow(-0.66, 0.585, 2.06, 0xffeccb, 0.56), addGlow(0.66, 0.585, 2.06, 0xffeccb, 0.56)];
+const glowTail = [addGlow(-0.46, 0.815, -2.36, 0xff2a20, 0.40), addGlow(0.46, 0.815, -2.36, 0xff2a20, 0.40),
+  addGlow(0, 0.815, -2.36, 0xff2a20, 0.34)
+];
+
+
+
+
+
+
+
+
+
+
+
+
+const exhaustPos = exhausts.map(e => e.position.clone());
+
+function mergeStatic(root, skip) {
+
+
+
+
+
+  root.updateWorldMatrix(true, true);
+  const toLocal = root.matrixWorld.clone().invert();
+  const groups = new Map(),
+    src = [],
+    _m = new THREE.Matrix4();
+  root.traverse(o => {
+        if (!o.isMesh || (skip && skip.has(o))) return;
+
+        if (o.material.blending !== THREE.NormalBlending) return;
+        src.push(o);
