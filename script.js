@@ -4861,3 +4861,110 @@ function updateMilestoneWorld() {
   const f = frameAt(car.s);
   updateTiles(f.x, f.z);
 }
+
+
+const milestoneKeys = {};
+const milestoneStart = document.getElementById('start');
+const milestoneSpeed = document.getElementById('speed');
+const milestoneDistance = document.getElementById('dist');
+const milestoneBoost = document.getElementById('boostFill');
+const milestoneCameraTarget = new THREE.Vector3();
+const milestoneCameraPosition = new THREE.Vector3();
+let milestoneStarted = false;
+let milestoneLast = performance.now();
+let milestoneAccumulator = 0;
+let clock = 0;
+
+function beginMilestone() {
+  if (milestoneStarted) return;
+  milestoneStarted = true;
+  milestoneStart.classList.add('hide');
+  document.getElementById('hud').classList.add('on');
+  setTimeout(() => {
+    milestoneStart.style.display = 'none';
+  }, 1400);
+}
+
+function readMilestoneInput(dt) {
+  const throttle = milestoneKeys.KeyW || milestoneKeys.ArrowUp;
+  const brake = milestoneKeys.KeyS || milestoneKeys.ArrowDown;
+  const left = milestoneKeys.KeyA || milestoneKeys.ArrowLeft;
+  const right = milestoneKeys.KeyD || milestoneKeys.ArrowRight;
+  input.th = damp(input.th, throttle ? 1 : 0, 9, dt);
+  input.br = damp(input.br, brake ? 1 : 0, 13, dt);
+  input.st = damp(input.st, (left ? 1 : 0) - (right ? 1 : 0), 8, dt);
+  input.hb = milestoneKeys.Space ? 1 : 0;
+  input.bo = !!(milestoneKeys.ShiftLeft || milestoneKeys.ShiftRight);
+}
+
+function updateMilestoneCamera(dt, frame) {
+  const yaw = frame.h + car.yaw;
+  const distance = 10 + clamp(Math.abs(car.vLong) / 25, 0, 3);
+  milestoneCameraPosition.set(
+    milestoneCarPosition.x - Math.sin(yaw) * distance,
+    car.y + 4.2,
+    milestoneCarPosition.z - Math.cos(yaw) * distance
+  );
+  camera.position.lerp(milestoneCameraPosition, clamp(dt * 5, 0, 1));
+  milestoneCameraTarget.set(milestoneCarPosition.x, car.y + 0.7, milestoneCarPosition.z);
+  camera.lookAt(milestoneCameraTarget);
+}
+
+function updateMilestoneHud() {
+  milestoneSpeed.textContent = Math.round(Math.abs(car.vLong) * 3.6);
+  milestoneDistance.textContent = (car.dist / 1000).toFixed(2);
+  milestoneBoost.style.transform = 'scaleX(' + car.boost + ')';
+}
+
+addEventListener('keydown', event => {
+  milestoneKeys[event.code] = true;
+  beginMilestone();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
+    event.preventDefault();
+  }
+});
+
+addEventListener('keyup', event => {
+  milestoneKeys[event.code] = false;
+});
+
+addEventListener('pointerdown', beginMilestone);
+addEventListener('blur', () => {
+  for (const code in milestoneKeys) milestoneKeys[code] = false;
+});
+
+function milestoneFrame(now) {
+  requestAnimationFrame(milestoneFrame);
+  const dt = Math.min((now - milestoneLast) / 1000, 0.05);
+  milestoneLast = now;
+  if (milestoneStarted) {
+    readMilestoneInput(dt);
+    milestoneAccumulator += dt;
+    while (milestoneAccumulator >= 1 / 120) {
+      stepPhysics(1 / 120);
+      milestoneAccumulator -= 1 / 120;
+    }
+    clock += dt;
+    updateMilestoneWorld();
+    drainQueue(5, 2);
+  }
+  const frame = placeMilestoneCar();
+  updateMilestoneCamera(dt, frame);
+  applySky(dt, camera.position);
+  updateMilestoneHud();
+  renderer.render(scene, camera);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(...bufferSize(Math.min(devicePixelRatio || 1, DPR_CAP)), false);
+});
+
+pathReset();
+updateMilestoneWorld();
+drainQueue(600, 12);
+settleSuspension();
+placeMilestoneCar();
+camera.position.set(0, car.y + 4.2, -10);
+requestAnimationFrame(milestoneFrame);
