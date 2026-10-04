@@ -3081,3 +3081,163 @@ function archAt(z) {
     y,
     w
   };
+}
+
+const PROF_N = 26;
+
+function stationProfile(st) {
+  const [z, wF, wMax, wB, wR, yF, ySh, yB, yR] = st;
+  const A = archAt(z);
+  const wFl = lerp(wF, 0.575, A.a);
+  const yFl = lerp(yF, 0.255, A.a);
+  const wLow = lerp(wMax * 0.985, A.w, A.a);
+  const yLow = lerp(lerp(yF, ySh, 0.44), A.y, A.a);
+  const yShE = clamp(Math.max(ySh, yLow + 0.05), 0, yB - 0.022);
+
+  const key = [
+    [0.0, yFl],
+    [wFl * 0.72, yFl - 0.006],
+    [wFl, yFl + 0.030],
+    [wLow * 0.985, lerp(yFl, yLow, 0.55)],
+    [wLow, yLow],
+    [lerp(wLow, wMax, 0.66), lerp(yLow, yShE, 0.52)],
+    [wMax, yShE],
+    [wMax * 0.992, yB - 0.042],
+    [wB, yB],
+    [wR * 1.06, lerp(yB, yR, 0.50)],
+    [wR, yR - 0.038],
+    [0.0, yR],
+  ];
+  return resample(key, PROF_N);
+}
+
+function resample(pts, n) {
+  const out = [];
+  const P = (i) => pts[clamp(i, 0, pts.length - 1)];
+  const segs = pts.length - 1;
+  for (let i = 0; i < n; i++) {
+    const f = (i / (n - 1)) * segs;
+    const s = Math.min(Math.floor(f), segs - 1);
+    const t = f - s;
+    const p0 = P(s - 1),
+      p1 = P(s),
+      p2 = P(s + 1),
+      p3 = P(s + 2);
+    const t2 = t * t,
+      t3 = t2 * t;
+    const x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+    const y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+    out.push([Math.max(0, x), y]);
+  }
+  return out;
+}
+
+const HALVES = STATIONS.map(stationProfile);
+
+
+
+function bodyX(z, y) {
+  let i = 0;
+  while (i < STATIONS.length - 2 && STATIONS[i + 1][0] < z) i++;
+  const t = clamp((z - STATIONS[i][0]) / (STATIONS[i + 1][0] - STATIONS[i][0]), 0, 1);
+  const A = HALVES[i],
+    B = HALVES[i + 1];
+  let best = 0;
+  for (let k = 0; k < PROF_N - 1; k++) {
+    const x1 = lerp(A[k][0], B[k][0], t),
+      y1 = lerp(A[k][1], B[k][1], t);
+    const x2 = lerp(A[k + 1][0], B[k + 1][0], t),
+      y2 = lerp(A[k + 1][1], B[k + 1][1], t);
+    if (y1 === y2) continue;
+    const u = (y - y1) / (y2 - y1);
+    if (u >= 0 && u <= 1) best = Math.max(best, lerp(x1, x2, u));
+  }
+  return best;
+}
+
+function bodyTop(z) {
+  let i = 0;
+  while (i < STATIONS.length - 2 && STATIONS[i + 1][0] < z) i++;
+  const t = clamp((z - STATIONS[i][0]) / (STATIONS[i + 1][0] - STATIONS[i][0]), 0, 1);
+  return lerp(HALVES[i][PROF_N - 1][1], HALVES[i + 1][PROF_N - 1][1], t);
+}
+
+function buildCarBody() {
+  const rows = STATIONS.length;
+  const halves = HALVES;
+  const cols = PROF_N * 2 - 2;
+  const pos = [],
+    grpPaint = [],
+    grpGlass = [],
+    grpTrim = [];
+
+  const V = (r, c) => {
+    const st = STATIONS[r],
+      h = halves[r];
+    let ci = c,
+      sgn = 1;
+    if (c >= PROF_N) {
+      ci = cols - c;
+      sgn = -1;
+    }
+    const p = h[clamp(ci, 0, PROF_N - 1)];
+    return [p[0] * sgn, p[1], st[0]];
+  };
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const v = V(r, c);
+      pos.push(v[0], v[1], v[2]);
+    }
+
+  const isGlass = (r, c) => {
+    const z = STATIONS[r][0];
+    if (z < -1.18 || z > 0.96) return false;
+    const ci = c < PROF_N ? c : cols - c;
+    return ci >= 18 && ci <= 22;
+  };
+  const isTrim = (r, c) => {
+    const ci = c < PROF_N ? c : cols - c;
+    return ci <= 2;
+  };
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols; c++) {
+      const c2 = (c + 1) % cols;
+      const a = r * cols + c,
+        b = r * cols + c2,
+        d = (r + 1) * cols + c,
+        e = (r + 1) * cols + c2;
+      const tri = [a, b, d, b, e, d];
+      const g = isGlass(r, c) && isGlass(r + 1, c) ? grpGlass : (isTrim(r, c) ? grpTrim : grpPaint);
+      g.push(...tri);
+    }
+
+  for (const [r, front] of [
+      [0, false],
+      [rows - 1, true]
+    ]) {
+    let cx = 0,
+      cy = 0;
+    for (let c = 0; c < cols; c++) {
+      const v = V(r, c);
+      cx += v[0];
+      cy += v[1];
+    }
+    cx /= cols;
+    cy /= cols;
+    const ci = pos.length / 3;
+    pos.push(cx, cy, STATIONS[r][0]);
+    for (let c = 0; c < cols; c++) {
+      const a = r * cols + c,
+        b = r * cols + ((c + 1) % cols);
+      grpTrim.push(front ? ci : ci, front ? a : b, front ? b : a);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const all = grpPaint.concat(grpGlass, grpTrim);
+  geo.setIndex(all);
+  geo.addGroup(0, grpPaint.length, 0);
+  geo.addGroup(grpPaint.length, grpGlass.length, 1);
+  geo.addGroup(grpPaint.length + grpGlass.length, grpTrim.length, 2);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, [paintMat, glassMat, carbonMat]);
