@@ -3912,3 +3912,213 @@ for (const sgn of [-1, 1]) {
   cap.position.set(sgn * (xs + 0.120), y + 0.058, z - 0.008);
   cap.castShadow = true;
   carBody.add(cap);
+  const gl = new THREE.Mesh(new THREE.CircleGeometry(0.048, 12), mirrorGlass);
+  gl.position.set(sgn * (xs + 0.122), y + 0.058, z - 0.055);
+  gl.rotation.y = Math.PI + sgn * 0.22;
+  carBody.add(gl);
+}
+
+const ductMat = new THREE.MeshStandardMaterial({
+  color: 0x08090b,
+  roughness: 0.85,
+  metalness: 0.1,
+  envMapIntensity: 0.25,
+  side: THREE.DoubleSide
+});
+for (const sgn of [-1, 1]) {
+  carBody.add(skinBlade(ductMat, sgn, -0.98, -0.30, 0.615, 0.135, 0.005, 0.55));
+  const fence = skinStrip(carbonMat, sgn, [{
+      z: -0.30,
+      yT: 0.760,
+      yB: 0.470,
+      out: 0.012
+    },
+    {
+      z: -0.62,
+      yT: 0.775,
+      yB: 0.455,
+      out: 0.040
+    },
+    {
+      z: -0.98,
+      yT: 0.745,
+      yB: 0.470,
+      out: 0.014
+    },
+  ]);
+  carBody.add(fence);
+  carBody.add(skinBlade(ductMat, sgn, 0.86, 1.02, 0.560, 0.105, 0.005, 0.20));
+}
+
+{
+  const zs = [],
+    N = 11;
+  for (let i = 0; i < N; i++) {
+    const f = i / (N - 1),
+      x = (f - 0.5) * 2;
+    zs.push({
+      x,
+      z: 2.26 - x * x * 0.30,
+      h: 0.070 * (1.0 - 0.45 * x * x)
+    });
+  }
+  const pos = [],
+    idx = [];
+  for (const s of zs) {
+    const halfHere = Math.max(bodyX(s.z, 0.42), 0.05);
+    pos.push(s.x * halfHere * 0.94, 0.425 + s.h, s.z + 0.012,
+      s.x * halfHere * 0.94, 0.425 - s.h, s.z + 0.012);
+  }
+  for (let i = 0; i < N - 1; i++) {
+    const a = i * 2,
+      b = i * 2 + 1,
+      c = (i + 1) * 2,
+      d = (i + 1) * 2 + 1;
+    idx.push(a, b, c, b, d, c);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  carBody.add(new THREE.Mesh(g, ductMat));
+  for (const sgn of [-1, 1])
+    carBody.add(skinBlade(ductMat, sgn, 1.90, 2.12, 0.440, 0.070, 0.007, 0.25));
+}
+
+
+const headMat = new THREE.MeshStandardMaterial({
+  color: 0x111318,
+  emissive: 0xfff0d8,
+  emissiveIntensity: 0.0,
+  roughness: 0.08,
+  metalness: 0.1,
+  envMapIntensity: 2.0,
+  side: THREE.DoubleSide
+});
+const tailMat = new THREE.MeshStandardMaterial({
+  color: 0x1a0304,
+  emissive: 0xff1417,
+  emissiveIntensity: 0.5,
+  roughness: 0.16,
+  metalness: 0.0,
+  envMapIntensity: 1.2
+});
+const reverseMat = new THREE.MeshStandardMaterial({
+  color: 0x141414,
+  emissive: 0xffffff,
+  emissiveIntensity: 0.0,
+  roughness: 0.2
+});
+
+
+const headlights = [];
+for (const sgn of [-1, 1]) {
+  const lens = skinBlade(headMat, sgn, 1.82, 2.22, 0.585, 0.055, 0.008, 0.15);
+  carBody.add(lens);
+  headlights.push(lens);
+  const drl = skinStrip(headMat, sgn, [{
+      z: 1.94,
+      yT: 0.512,
+      yB: 0.492,
+      out: 0.010
+    },
+    {
+      z: 2.12,
+      yT: 0.518,
+      yB: 0.494,
+      out: 0.010
+    },
+    {
+      z: 2.22,
+      yT: 0.516,
+      yB: 0.500,
+      out: 0.010
+    },
+  ]);
+  carBody.add(drl);
+  headlights.push(drl);
+}
+
+
+
+
+
+
+
+const tailRunMat = new THREE.MeshStandardMaterial({
+  color: 0x1a0304,
+  emissive: 0xff1417,
+  emissiveIntensity: 0.55,
+  roughness: 0.16,
+  metalness: 0.0,
+  envMapIntensity: 1.2
+});
+const plateMat = new THREE.MeshStandardMaterial({
+  color: 0xd8d9d4,
+  roughness: 0.55,
+  metalness: 0.0,
+  envMapIntensity: 0.5
+});
+const taillights = [];
+{
+  const yT = 0.815,
+    half = bodyX(-2.28, yT);
+
+  carBody.add(box(half * 1.96, 0.150, 0.045, ductMat, 0, yT, -2.292));
+
+
+
+
+
+
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(half * 0.54, 0.020, 0.045), tailRunMat);
+  strip.position.set(0, yT, -2.306);
+  carBody.add(strip);
+  for (const sgn of [-1, 1]) {
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(half * 0.60, 0.040, 0.05), tailMat);
+    upper.position.set(sgn * half * 0.62, yT + 0.030, -2.308);
+    carBody.add(upper);
+    taillights.push(upper);
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(half * 0.60, 0.024, 0.05), tailMat);
+    lower.position.set(sgn * half * 0.62, yT - 0.034, -2.306);
+    carBody.add(lower);
+    taillights.push(lower);
+
+
+
+
+    const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.086, 0.115), tailRunMat);
+    wrap.position.set(sgn * (half * 0.96), yT, -2.250);
+    wrap.rotation.y = sgn * 0.20;
+    carBody.add(wrap);
+  }
+
+
+
+
+  carBody.add(box(half * 1.80, 0.055, 0.075, aeroMat, 0, 0.700, -2.284));
+  carBody.add(box(0.360, 0.130, 0.030, ductMat, 0, 0.615, -2.294));
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.320, 0.105, 0.012), plateMat);
+  plate.position.set(0, 0.615, -2.304);
+  carBody.add(plate);
+  for (const sgn of [-1, 1]) {
+    const rv = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.032, 0.04), reverseMat);
+    rv.position.set(sgn * 0.300, 0.615, -2.297);
+    carBody.add(rv);
+
+    const refl = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.026, 0.03),
+      new THREE.MeshStandardMaterial({
+        color: 0x2a0507,
+        roughness: 0.35,
+        metalness: 0.0,
+        envMapIntensity: 1.4
+      }));
+    refl.position.set(sgn * (half * 0.86), 0.520, -2.292);
+    carBody.add(refl);
+  }
+
+
+
+
+  const hi = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.022, 0.03), tailMat);
+  hi.position.set(0, bodyTop(-1.94) + 0.085, -1.905);
