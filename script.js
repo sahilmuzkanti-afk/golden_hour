@@ -4291,7 +4291,203 @@ function mergeStatic(root, skip) {
     src = [],
     _m = new THREE.Matrix4();
   root.traverse(o => {
-        if (!o.isMesh || (skip && skip.has(o))) return;
+    if (!o.isMesh || (skip && skip.has(o))) return;
 
-        if (o.material.blending !== THREE.NormalBlending) return;
-        src.push(o);
+    if (o.material.blending !== THREE.NormalBlending) return;
+    src.push(o);
+  });
+  for (const o of src) {
+    let g = groups.get(o.material.uuid);
+    if (!g) {
+      g = {
+        mat: o.material,
+        cast: false,
+        recv: false,
+        list: []
+      };
+      groups.set(o.material.uuid, g);
+    }
+
+
+    g.cast = g.cast || o.castShadow;
+    g.recv = g.recv || o.receiveShadow;
+    g.list.push(o);
+  }
+  for (const g of groups.values()) {
+    if (g.list.length < 2) continue;
+    const geos = g.list.map(o => {
+      o.updateWorldMatrix(true, false);
+      return o.geometry.clone().applyMatrix4(_m.copy(toLocal).multiply(o.matrixWorld));
+    });
+    const m = new THREE.Mesh(mergeGeos(geos), g.mat);
+    m.castShadow = g.cast;
+    m.receiveShadow = g.recv;
+    m.name = 'merged';
+    root.add(m);
+    for (const x of geos) x.dispose();
+    for (const o of g.list) {
+      o.geometry.dispose();
+      o.removeFromParent();
+    }
+  }
+} {
+
+
+
+  const skip = new Set();
+  for (const wh of wheelHub) {
+    mergeStatic(wh.spin);
+    wh.spin.traverse(o => skip.add(o));
+  }
+  for (const o of [...flames, ...volCones]) skip.add(o);
+
+
+
+
+
+
+
+
+
+
+
+  const pitSkip = new Set();
+  for (const p of [DIAL.tach, DIAL.speedo, wheelSpin]) p.traverse(o => pitSkip.add(o));
+  mergeStatic(cockpit, pitSkip);
+  cockpit.traverse(o => skip.add(o));
+
+
+
+
+
+
+  stubInterior.traverse(o => skip.add(o));
+
+  mergeStatic(carBody, skip);
+}
+
+
+
+
+const CARP = {
+  m: 1290,
+  Iz: 1750,
+  lf: 1.48,
+  lr: 1.52,
+
+
+
+
+
+
+  Cf: 132000,
+  Cr: 146000,
+  muF: 1.26,
+  muR: 1.42,
+
+
+
+
+
+
+  engine: 10600,
+  power: 250000,
+  brakeF: 16200,
+  drag: 0.78,
+  roll: 22,
+  maxSteer: 0.58,
+  hcg: 0.46,
+  brakeBias: 0.68,
+};
+const car = {
+  s: 0,
+  n: 0,
+  yaw: 0,
+  vLong: 0,
+  vLat: 0,
+  omega: 0,
+  y: 0,
+  vy: 0,
+  air: false,
+  pitch: 0,
+  roll: 0,
+  ride: 0,
+  wheelSpin: 0,
+  steer: 0,
+  steerVis: 0,
+  boost: 1,
+  boosting: false,
+  boostAmt: 0,
+  slip: 0,
+  screech: 0,
+  offroad: 0,
+  dist: 0,
+  rpm: 900,
+  gear: 1,
+  shiftT: 0,
+  landImpact: 0,
+  rough: 0,
+  ax: 0,
+  wheelslip: 0,
+};
+const KEYS_DOWN = {};
+const input = {
+  th: 0,
+  br: 0,
+  st: 0,
+  hb: 0,
+  bo: 0
+};
+
+
+
+
+const KUS = 0.0017,
+  WB = CARP.lf + CARP.lr;
+
+
+
+
+
+
+
+function steerCapAt(spd) {
+  const v = Math.max(spd, 6);
+  return Math.min(CARP.maxSteer, 1.45 * CARP.muF * GRAV * (WB + KUS * v * v) / (v * v));
+}
+
+function steerForCurve(k, spd) {
+  return k * (WB + KUS * spd * spd);
+}
+
+
+
+
+
+function settleSuspension() {
+  car.y = sampleWheels().avg + RIDE - GRAV / SUSP_K;
+  car.vy = 0;
+  car.air = false;
+  car.airT = 0;
+}
+
+function resetCar() {
+  car.s = 0;
+  car.n = 0;
+  car.yaw = 0;
+  car.vLong = 0;
+  car.vLat = 0;
+  car.omega = 0;
+  car.dist = 0;
+  car.boost = 1;
+  car.pitch = 0;
+  car.roll = 0;
+  car.slip = 0;
+  car.rpm = 900;
+  car.gear = 1;
+  car.offroad = 0;
+  car.boostAmt = 0;
+  car.landImpact = 0;
+  input.th = input.br = input.st = input.hb = 0;
+  input.bo = false;
+  settleSuspension();
