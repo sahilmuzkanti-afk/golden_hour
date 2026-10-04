@@ -3570,3 +3570,171 @@ const wheelSpin = new THREE.Group();
   wheelTilt.rotation.x = 1.04;
   wheelTilt.add(wheelSpin);
   cockpit.add(wheelTilt);
+
+  const rimMatW = new THREE.MeshStandardMaterial({
+    color: 0x121317,
+    roughness: 0.62,
+    metalness: 0.15,
+    envMapIntensity: 0.35
+  });
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.165, 0.019, 10, 30), rimMatW);
+  wheelSpin.add(rim);
+
+  const chord = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.030, 0.038), rimMatW);
+  chord.position.y = -0.152;
+  wheelSpin.add(chord);
+  for (const a of [Math.PI * 0.5, Math.PI * 1.17, Math.PI * 1.83]) {
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.030, 0.135, 0.020), bezelMat);
+    spoke.position.set(Math.cos(a) * 0.082, Math.sin(a) * 0.082, 0.004);
+    spoke.rotation.z = a - Math.PI / 2;
+    wheelSpin.add(spoke);
+  }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.050, 0.030, 18), bezelMat);
+  hub.rotation.x = Math.PI / 2;
+  wheelSpin.add(hub);
+  const badge = new THREE.Mesh(new THREE.CircleGeometry(0.022, 14),
+    new THREE.MeshStandardMaterial({
+      color: CARCOL,
+      roughness: 0.3,
+      metalness: 0.2,
+      emissive: CARCOL,
+      emissiveIntensity: 0.10
+    }));
+  badge.position.z = 0.017;
+  wheelSpin.add(badge);
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.24, 12), bezelMat);
+  column.rotation.x = Math.PI / 2;
+  column.position.z = -0.13;
+  wheelTilt.add(column);
+}
+
+
+
+
+
+{
+  const mount = new THREE.Group();
+  mount.position.set(-0.10, 1.150, 0.335);
+  cockpit.add(mount);
+  const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.075, 8), bezelMat);
+  stalk.position.y = 0.042;
+  stalk.rotation.x = -0.30;
+  mount.add(stalk);
+  const shellM = new THREE.Mesh(new THREE.BoxGeometry(0.255, 0.070, 0.030),
+    new THREE.MeshStandardMaterial({
+      color: 0x14161a,
+      roughness: 0.8,
+      metalness: 0.1,
+      envMapIntensity: 0.2
+    }));
+  shellM.rotation.x = 0.14;
+  mount.add(shellM);
+  const glassM = new THREE.Mesh(new THREE.PlaneGeometry(0.238, 0.058),
+    new THREE.MeshStandardMaterial({
+      color: 0x6d7782,
+      roughness: 0.10,
+      metalness: 1.0,
+      envMapIntensity: 1.05
+    }));
+  glassM.position.set(0, 0, -0.017);
+  glassM.rotation.set(0.05, Math.PI, 0);
+  mount.add(glassM);
+}
+
+
+
+
+
+
+
+
+const RIM = 0.80;
+
+function buildWheel(radius, width, spokes) {
+  const g = new THREE.Group();
+
+  const pts = [];
+  const hw = width / 2;
+  pts.push(new THREE.Vector2(radius * RIM, -hw * 0.94));
+  pts.push(new THREE.Vector2(radius * (RIM + 0.06), -hw));
+  pts.push(new THREE.Vector2(radius * 0.99, -hw * 0.86));
+  pts.push(new THREE.Vector2(radius, -hw * 0.62));
+  pts.push(new THREE.Vector2(radius, hw * 0.62));
+  pts.push(new THREE.Vector2(radius * 0.99, hw * 0.86));
+  pts.push(new THREE.Vector2(radius * (RIM + 0.06), hw));
+  pts.push(new THREE.Vector2(radius * RIM, hw * 0.94));
+  const tyre = new THREE.LatheGeometry(pts, 30);
+  tyre.rotateZ(Math.PI / 2);
+  const tm = new THREE.Mesh(tyre, tyreMat);
+  tm.castShadow = true;
+  g.add(tm);
+
+
+  const barrel = new THREE.CylinderGeometry(radius * RIM, radius * RIM, width * 0.96, 26, 1, true);
+  barrel.rotateZ(Math.PI / 2);
+  g.add(new THREE.Mesh(barrel, rimMat));
+
+  const lip = new THREE.TorusGeometry(radius * RIM * 0.985, radius * 0.022, 6, 30);
+  lip.rotateY(Math.PI / 2);
+  lip.translate(width * 0.44, 0, 0);
+  g.add(new THREE.Mesh(lip, chromeMat));
+
+
+
+  const back = new THREE.CircleGeometry(radius * RIM * 0.99, 26);
+  back.rotateY(Math.PI / 2);
+  back.translate(-width * 0.30, 0, 0);
+  g.add(new THREE.Mesh(back, rimBackMat));
+
+  const spokeL = radius * RIM * 0.78;
+  for (let i = 0; i < spokes; i++) {
+    const sg = new THREE.BoxGeometry(width * 0.30, spokeL, radius * 0.115);
+
+    const p = sg.attributes.position;
+    for (let k = 0; k < p.count; k++) {
+      const t = (p.getY(k) / spokeL) + 0.5;
+      p.setZ(k, p.getZ(k) * (0.42 + 0.58 * t));
+      p.setX(k, p.getX(k) - (1 - t) * width * 0.16);
+    }
+    sg.computeVertexNormals();
+    const m = new THREE.Mesh(sg, rimMat);
+    m.position.x = width * 0.24;
+    m.rotation.x = (i / spokes) * TAU;
+    m.position.y = Math.cos(m.rotation.x) * spokeL * 0.52;
+    m.position.z = Math.sin(m.rotation.x) * spokeL * 0.52;
+    m.castShadow = true;
+    g.add(m);
+  }
+
+  const hub = new THREE.CylinderGeometry(radius * 0.17, radius * 0.17, width * 0.44, 14);
+  hub.rotateZ(Math.PI / 2);
+  g.add(new THREE.Mesh(hub, rimMat));
+  const cap = new THREE.CylinderGeometry(radius * 0.085, radius * 0.075, 0.02, 14);
+  cap.rotateZ(Math.PI / 2);
+  cap.translate(width * 0.31, 0, 0);
+  g.add(new THREE.Mesh(cap, caliperMat));
+
+  const disc = new THREE.CylinderGeometry(radius * 0.58, radius * 0.58, 0.028, 22);
+  disc.rotateZ(Math.PI / 2);
+  const dm = new THREE.Mesh(disc, rotorMat);
+  dm.position.x = -width * 0.12;
+  g.add(dm);
+  const cal = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.20, 0.13), caliperMat);
+  cal.position.set(-width * 0.12, radius * 0.42, 0);
+  g.add(cal);
+  return g;
+}
+const WHEEL = {
+  fr: 0.352,
+  rr: 0.382,
+  fw: 0.30,
+  rw: 0.36
+};
+const wheels = [];
+const wheelHub = [];
+
+const WPOS = [
+    [0.845, 1.32, WHEEL.fr, WHEEL.fw, true],
+    [-0.845, 1.32, WHEEL.fr, WHEEL.fw, true],
+    [0.860, -1.30, WHEEL.rr, WHEEL.rw, false],
+    [-0.860, -1.30, WHEEL.rr, WHEEL.rw, false],
