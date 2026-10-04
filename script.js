@@ -3241,3 +3241,153 @@ function buildCarBody() {
   geo.addGroup(grpPaint.length + grpGlass.length, grpTrim.length, 2);
   geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, [paintMat, glassMat, carbonMat]);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+const carShell = buildCarBody();
+carBody.add(carShell);
+
+
+const cabinMat = new THREE.MeshStandardMaterial({
+  color: 0x0c0d10,
+  roughness: 0.88,
+  metalness: 0.05,
+  envMapIntensity: 0.2
+});
+
+
+
+
+
+
+
+
+const stubInterior = new THREE.Group();
+carBody.add(stubInterior);
+let stubWheel = null,
+  stubDash = null;
+{
+  const tub = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.58, 1.86), cabinMat);
+  tub.position.set(0, 0.62, -0.14);
+  stubInterior.add(tub);
+
+  for (const sgn of [-1, 1]) {
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.44, 0.15), cabinMat);
+    seat.position.set(sgn * 0.31, 0.90, -0.60);
+    seat.rotation.x = 0.17;
+    stubInterior.add(seat);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.09, 0.42), cabinMat);
+    base.position.set(sgn * 0.31, 0.715, -0.38);
+    stubInterior.add(base);
+  }
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.18, 0.32), cabinMat);
+  dash.position.set(0, 0.86, 0.50);
+  dash.rotation.x = -0.30;
+  stubInterior.add(dash);
+  stubDash = dash;
+  const wheelR = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.020, 8, 20), cabinMat);
+  wheelR.position.set(-0.31, 0.895, 0.28);
+  wheelR.rotation.x = 1.10;
+  stubInterior.add(wheelR);
+  stubWheel = wheelR;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const cockpit = new THREE.Group();
+cockpit.visible = false;
+carBody.add(cockpit);
+
+const interiorMat = new THREE.MeshStandardMaterial({
+  color: 0x121317,
+  roughness: 0.94,
+  metalness: 0.04,
+  envMapIntensity: 0.16,
+  side: THREE.BackSide
+});
+
+
+
+const interiorMat2 = new THREE.MeshStandardMaterial({
+  color: 0x131418,
+  roughness: 0.95,
+  metalness: 0.03,
+  envMapIntensity: 0.14,
+  side: THREE.DoubleSide
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{
+  const P = (w, h, x, y, z, rx, ry) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), interiorMat2);
+    m.position.set(x, y, z);
+    m.rotation.set(rx || 0, ry || 0, 0);
+    cockpit.add(m);
+    return m;
+  };
+
+
+
+
+
+
+
+
+  const roof = new THREE.Mesh(new THREE.PlaneGeometry(1.20, 1.40), interiorMat2);
+  roof.rotation.x = Math.PI / 2;
+  roof.position.set(0, 1.186, -0.30);
+  cockpit.add(roof);
+
+
+  const header = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.05, 0.13), interiorMat2);
+  header.position.set(0, 1.168, 0.375);
+  header.rotation.x = -0.34;
+  cockpit.add(header);
+  for (const s of [-1, 1]) {
+    const pil = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.40, 0.06), interiorMat2);
+    pil.position.set(s * 0.545, 1.000, 0.470);
+    pil.rotation.set(-0.62, 0, s * 0.20);
+    cockpit.add(pil);
+  }
+
+
+
+  for (const s of [-1, 1]) {
+    P(1.45, 0.22, s * 0.600, 0.815, -0.26, 0, s * Math.PI / 2);
+  }
+
+  P(1.22, 0.36, 0, 0.965, -1.00, 0, Math.PI);
+
+
+
+
+  P(1.20, 1.75, 0, 0.638, -0.20, -Math.PI / 2, 0);
+  const tunnel = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.13, 1.30), interiorMat2);
