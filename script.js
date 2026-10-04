@@ -4491,3 +4491,103 @@ function resetCar() {
   input.th = input.br = input.st = input.hb = 0;
   input.bo = false;
   settleSuspension();
+  trailReset();
+  placeCar();
+  camSnap();
+}
+
+const RIDE =  0.045;
+const SUSP_K = 165,
+SUSP_C = 19.5,
+TRAVEL = 0.34,
+GRAV = 9.81;
+
+function stepPhysics(dt) {
+  const th = input.th,
+  br = input.br,
+  hb = input.hb;
+  const boostOn = input.bo && car.boost > 0.02 && car.vLong > 3;
+  car.boosting = boostOn;
+  car.boost = clamp(car.boost + (boostOn ? -dt * 0.30 : dt * 0.135), 0, 1);
+  car.boostAmt = damp(car.boostAmt, boostOn ? 1 : 0, 7, dt);
+
+  const spd = Math.abs(car.vLong);
+  const steerCap = steerCapAt(spd);
+  const setTarget = input.st * steerCap;
+  car.steer = damp(car.steer, setTarget, 16, dt);
+  car.steerVis = damp(car.steerVis, input.st, 11, dt);
+
+  const v = Math.max(2.2, spd);
+  const L = CARP.lf + CARP.lr;
+  const dir = Math.sign(car.vLong || 1);
+
+  const aF = Math.atan2(car.vLat + car.omega * CARP.lf, v) - car.steer * dir;
+  const aR = Math.atan2(car.vLat - car.omega * CARP.lr, v);
+  car.slipR = aR;
+  const W = CARP.m * GRAV;
+
+
+
+
+  const dFz = clamp(CARP.m * car.ax * CARP.hcg / L, -0.40 * W, 0.40 * W);
+  const FzF = Math.max(700, W * CARP.lr / L - dFz);
+  const FzR = Math.max(700, W * CARP.lf / L + dFz);
+
+
+  const gripScale = (1 - car.airT * 0.93) * (1 - car.offroad * 0.20);
+
+
+  const muR = (1 - hb * 0.54) * CARP.muR * gripScale;
+  const muF = CARP.muF * gripScale;
+  const Cr = CARP.Cr * (1 - hb * 0.48);
+  const capF = muF * FzF,
+  capR = muR * FzR;
+
+
+
+
+
+
+  const boostMul = 1 + car.boostAmt * 0.47;
+  const tractive = Math.min(CARP.engine, CARP.power / Math.max(v, 8)) * boostMul;
+  const brakeF_ = br * CARP.brakeF;
+  let fxF = -brakeF_ * CARP.brakeBias * dir;
+
+
+
+
+
+
+
+
+
+
+  const tcs = 1 - clamp((Math.abs(aR) - 0.05) / 0.13, 0, 0.78) * (1 - hb);
+  car.tcs = tcs;
+  let fxR = th * tractive * tcs - brakeF_ * (1 - CARP.brakeBias) * dir;
+
+
+  if(hb) fxR -= 2350 * (1 - th * 0.55) * dir;
+
+
+
+
+
+
+
+
+
+  fxF = clamp(fxF, -capF * 0.95, capF * 0.95);
+  const rLim = capR * (fxR >= 0 ? 0.92 : 0.78);
+  const fxRcl = clamp(fxR, -rLim, rLim);
+  car.wheelslip = damp(car.wheelslip, Math.min(1, Math.abs(fxR - fxRcl) / 2600), 9, dt);
+  fxR = fxRcl;
+
+  const roomF = Math.sqrt(Math.max(0, 1 - (fxF / capF) * (fxF / capF)));
+  const roomR = Math.sqrt(Math.max(0, 1 - (fxR / capR) * (fxR / capR)));
+  const FyF = clamp(-CARP.Cf * aF, -capF * roomF, capF * roomF);
+  const FyR = clamp(-Cr * aR, -capR * roomR, capR * roomR);
+
+  let Fx = fxF + fxR;
+  
+}
