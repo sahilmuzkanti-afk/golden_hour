@@ -3391,3 +3391,182 @@ const interiorMat2 = new THREE.MeshStandardMaterial({
 
   P(1.20, 1.75, 0, 0.638, -0.20, -Math.PI / 2, 0);
   const tunnel = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.13, 1.30), interiorMat2);
+  tunnel.position.set(0.02, 0.700, -0.24);
+  cockpit.add(tunnel);
+
+
+
+  for (const s of [-1, 1]) {
+    const squab = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.09, 0.46), interiorMat2);
+    squab.position.set(s * 0.31, 0.720, -0.36);
+    cockpit.add(squab);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.52, 0.10), interiorMat2);
+    back.position.set(s * 0.31, 0.960, -0.62);
+    back.rotation.x = 0.16;
+    cockpit.add(back);
+  }
+}
+
+
+
+
+const dialTex = (major, redline, label, step) => canvasTex(256, 256, (g, w, h) => {
+  const cx = w / 2,
+    cy = h / 2,
+    R = w * 0.44;
+  g.fillStyle = '#0a0b0d';
+  g.beginPath();
+  g.arc(cx, cy, w * 0.5, 0, 7);
+  g.fill();
+
+  const grd = g.createRadialGradient(cx, cy * 0.72, 4, cx, cy, R);
+  grd.addColorStop(0, '#1b1d22');
+  grd.addColorStop(1, '#0a0b0d');
+  g.fillStyle = grd;
+  g.beginPath();
+  g.arc(cx, cy, R * 1.06, 0, 7);
+  g.fill();
+  const A0 = Math.PI * 0.75,
+    SW = Math.PI * 1.5;
+  for (let i = 0; i <= major * 2; i++) {
+    const t = i / (major * 2),
+      a = A0 + SW * t,
+      big = (i % 2 === 0);
+    const r0 = R * (big ? 0.80 : 0.88),
+      r1 = R * 0.985;
+    g.strokeStyle = (redline && t >= redline) ? '#e6402c' : (big ? '#e8ecf2' : '#8d949e');
+    g.lineWidth = big ? 4.5 : 2.2;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    g.stroke();
+    if (!big) continue;
+    const n = Math.round((i / 2) * step);
+    g.fillStyle = (redline && t >= redline) ? '#e6402c' : '#dfe4ea';
+    g.font = `600 ${w*0.085}px system-ui, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(String(n), cx + Math.cos(a) * R * 0.66, cy + Math.sin(a) * R * 0.66);
+  }
+  g.fillStyle = '#6f7681';
+  g.font = `500 ${w*0.058}px system-ui, sans-serif`;
+  g.textAlign = 'center';
+  g.fillText(label, cx, cy + R * 0.46);
+}, {
+  repeat: false
+});
+
+const dialFaceMat = m => new THREE.MeshStandardMaterial({
+  map: m,
+  roughness: 0.55,
+  metalness: 0.0,
+  envMapIntensity: 0.25
+});
+const bezelMat = new THREE.MeshStandardMaterial({
+  color: 0x2a2d33,
+  roughness: 0.35,
+  metalness: 0.85,
+  envMapIntensity: 0.7
+});
+const needleMat = new THREE.MeshStandardMaterial({
+  color: 0xff3a24,
+  roughness: 0.4,
+  metalness: 0.1,
+  emissive: 0x5a0a00,
+  emissiveIntensity: 1.0
+});
+
+
+function makeDial(r, tex) {
+  const gp = new THREE.Group();
+  const face = new THREE.Mesh(new THREE.CircleGeometry(r, 28), dialFaceMat(tex));
+  gp.add(face);
+  const bez = new THREE.Mesh(new THREE.TorusGeometry(r * 1.02, r * 0.075, 8, 26), bezelMat);
+  gp.add(bez);
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.02, r * 1.02, r * 0.42, 22, 1, true), bezelMat);
+  cup.rotation.x = Math.PI / 2;
+  cup.position.z = -r * 0.21;
+  gp.add(cup);
+
+
+  const piv = new THREE.Group();
+  const nd = new THREE.Mesh(new THREE.BoxGeometry(r * 0.055, r * 0.90, r * 0.035), needleMat);
+  nd.position.y = r * 0.33;
+  piv.add(nd);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(r * 0.055, r * 0.20, r * 0.035), needleMat);
+  tail.position.y = -r * 0.10;
+  piv.add(tail);
+  piv.position.z = r * 0.045;
+  gp.add(piv);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.12, r * 0.12, r * 0.09, 14), bezelMat);
+  hub.rotation.x = Math.PI / 2;
+  hub.position.z = r * 0.07;
+  gp.add(hub);
+  return {
+    group: gp,
+    pivot: piv
+  };
+}
+
+const DIAL = {
+  tach: null,
+  speedo: null
+};
+{
+
+
+
+
+  const DX = -0.32;
+  const pod = new THREE.Group();
+  pod.position.set(DX, 0.858, 0.325);
+  pod.rotation.set(0.16, Math.PI, 0);
+  cockpit.add(pod);
+
+  const tach = makeDial(0.105, dialTex(8, 0.78, 'RPM x1000', 1));
+  tach.group.position.set(-0.115, 0, 0);
+  pod.add(tach.group);
+  DIAL.tach = tach.pivot;
+
+
+  const speedo = makeDial(0.105, dialTex(8, 0, 'KM/H', 40));
+  speedo.group.position.set(0.115, 0, 0);
+  pod.add(speedo.group);
+  DIAL.speedo = speedo.pivot;
+
+
+  const hood = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.155, 0.155, 0.50, 18, 1, true, Math.PI * 0.06, Math.PI * 0.88),
+    interiorMat2.clone());
+  hood.material.side = THREE.DoubleSide;
+  hood.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+  hood.position.set(DX, 0.873, 0.30);
+  cockpit.add(hood);
+
+
+  const fascia = new THREE.Mesh(new THREE.BoxGeometry(1.10, 0.30, 0.30), interiorMat);
+  fascia.material = new THREE.MeshStandardMaterial({
+    color: 0x16181c,
+    roughness: 0.9,
+    metalness: 0.05,
+    envMapIntensity: 0.18
+  });
+  fascia.position.set(0, 0.690, 0.545);
+  fascia.rotation.x = -0.30;
+  cockpit.add(fascia);
+  const stack = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.19, 0.05), bezelMat);
+  stack.position.set(0.10, 0.790, 0.365);
+  stack.rotation.x = -0.34;
+  cockpit.add(stack);
+}
+
+
+
+
+const wheelTilt = new THREE.Group();
+const wheelSpin = new THREE.Group();
+{
+  wheelTilt.position.set(-0.32, 0.795, 0.220);
+  wheelTilt.rotation.x = 1.04;
+  wheelTilt.add(wheelSpin);
+  cockpit.add(wheelTilt);
