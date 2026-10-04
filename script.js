@@ -4496,16 +4496,16 @@ function resetCar() {
   camSnap();
 }
 
-const RIDE =  0.045;
+const RIDE = 0.045;
 const SUSP_K = 165,
-SUSP_C = 19.5,
-TRAVEL = 0.34,
-GRAV = 9.81;
+  SUSP_C = 19.5,
+  TRAVEL = 0.34,
+  GRAV = 9.81;
 
 function stepPhysics(dt) {
   const th = input.th,
-  br = input.br,
-  hb = input.hb;
+    br = input.br,
+    hb = input.hb;
   const boostOn = input.bo && car.boost > 0.02 && car.vLong > 3;
   car.boosting = boostOn;
   car.boost = clamp(car.boost + (boostOn ? -dt * 0.30 : dt * 0.135), 0, 1);
@@ -4513,8 +4513,8 @@ function stepPhysics(dt) {
 
   const spd = Math.abs(car.vLong);
   const steerCap = steerCapAt(spd);
-  const setTarget = input.st * steerCap;
-  car.steer = damp(car.steer, setTarget, 16, dt);
+  const stTarget = input.st * steerCap;
+  car.steer = damp(car.steer, stTarget, 16, dt);
   car.steerVis = damp(car.steerVis, input.st, 11, dt);
 
   const v = Math.max(2.2, spd);
@@ -4541,7 +4541,7 @@ function stepPhysics(dt) {
   const muF = CARP.muF * gripScale;
   const Cr = CARP.Cr * (1 - hb * 0.48);
   const capF = muF * FzF,
-  capR = muR * FzR;
+    capR = muR * FzR;
 
 
 
@@ -4567,7 +4567,7 @@ function stepPhysics(dt) {
   let fxR = th * tractive * tcs - brakeF_ * (1 - CARP.brakeBias) * dir;
 
 
-  if(hb) fxR -= 2350 * (1 - th * 0.55) * dir;
+  if (hb) fxR -= 2350 * (1 - th * 0.55) * dir;
 
 
 
@@ -4589,5 +4589,184 @@ function stepPhysics(dt) {
   const FyR = clamp(-Cr * aR, -capR * roomR, capR * roomR);
 
   let Fx = fxF + fxR;
+  Fx -= CARP.drag * car.vLong * Math.abs(car.vLong);
+  Fx -= (CARP.roll + car.offroad * 120) * car.vLong;
+  if (car.air) Fx = lerp(Fx, -CARP.drag * car.vLong * Math.abs(car.vLong), car.airT || 0);
+  car.ax = Fx / CARP.m;
+
+  car.vLong += (car.ax + car.vLat * car.omega) * dt;
+  car.vLat += ((FyF * Math.cos(car.steer) + FyR) / CARP.m - car.vLong * car.omega) * dt;
+  car.omega += ((CARP.lf * FyF * Math.cos(car.steer) - CARP.lr * FyR) / CARP.Iz) * dt;
+
+
+
+
+
+
+
+
+  const refRaw = car.vLong * car.steer / (L + KUS * car.vLong * car.vLong);
+  const yawCap = muF * GRAV / Math.max(v, 3);
+  const ref = clamp(refRaw, -yawCap, yawCap);
+
+
+
+
+
+
+  const assist = 2.1 * smooth(4, 26, spd) * (1 - hb * 0.66) * (1 - car.offroad * 0.55) * (1 - car.airT);
+  car.omega += (ref - car.omega) * Math.min(1, assist * dt);
+
+
+
+
+
+
+
+
+
+
+
+  const handsOff = (1 - Math.min(1, Math.abs(input.st) * 2.5)) * (1 - hb);
+  if (handsOff > 0.001) {
+    const settle = 3.0 * handsOff * smooth(6, 30, spd) * (1 - car.airT);
+    car.omega += (ref - car.omega) * Math.min(1, settle * dt);
+
+
+    car.vLat *= Math.exp(-1.35 * handsOff * (1 - car.airT) * dt);
+  }
+
+
+
+
+
+  const overSlip = clamp((Math.abs(aR) - 0.30) / 0.44, 0, 1);
+  car.omega *= Math.exp(-(0.20 + overSlip * overSlip * 7.5) * dt);
+
+
+
+
+
+
+
+  if (car.airT > 0.02) {
+    const k = car.airT * 3.4;
+    car.omega *= Math.exp(-k * dt);
+    car.vLat *= Math.exp(-k * 0.75 * dt);
+  }
+  if (car.vLong < 0) car.vLong = Math.max(car.vLong, -9);
+
+
+  const cy = Math.cos(car.yaw),
+    sy = Math.sin(car.yaw);
+  const ds = (car.vLong * cy - car.vLat * sy) * dt;
+  const dn = (car.vLong * sy + car.vLat * cy) * dt;
+  const kap = curvatureAt(car.s);
+  car.s += ds;
+  car.n += dn;
+  car.yaw += car.omega * dt - kap * ds;
+  car.yaw = Math.atan2(Math.sin(car.yaw), Math.cos(car.yaw));
+  car.dist += Math.abs(ds);
+
+
+
+  const nAbs = Math.abs(car.n);
+  if (nAbs > 24) {
+    const a = -Math.sign(car.n) * Math.min((nAbs - 24) * (nAbs - 24) * 0.055, 14) * dt;
+    car.vLong += -Math.sin(car.yaw) * a;
+    car.vLat += Math.cos(car.yaw) * a;
+    car.n = clamp(car.n, -38, 38);
+  }
+
+
+
+
+
+  car.offroad = damp(car.offroad, smooth(6.4, 12.5, Math.abs(car.n)), 8, dt);
+  car.slip = damp(car.slip, clamp(Math.abs(car.vLat) / 8.5, 0, 1), 10, dt);
+  car.screech = clamp(car.slip * 1.25 * smooth(4, 16, spd), 0, 1);
+
+
+  car.wheelSpin += (car.vLong / WHEEL.rr) * dt;
+  const gears = [3.2, 2.15, 1.55, 1.18, 0.95, 0.80];
+  let g = 0;
+  const kmh = spd * 3.6;
+  const cuts = [52, 95, 140, 186, 235];
+  while (g < cuts.length && kmh > cuts[g]) g++;
+  car.gear = g + 1;
+  const gr = gears[Math.min(g, gears.length - 1)];
+  car.rpm = clamp(900 + spd * gr * 93, 850, 8600);
+
+
+  const gnd = sampleWheels();
+  const restY = gnd.avg + RIDE + 0.0;
+  let acc = -GRAV;
+  const ext = car.y - restY;
+  car.ext = ext;
+  if (ext < TRAVEL) {
+
+
+
+
+
+
+    const d = clamp(ext, -TRAVEL, TRAVEL);
+
+
+    acc += (-d) * SUSP_K - car.vy * SUSP_C * (car.vy > 0 ? 2.1 : 1.0);
+    car.air = false;
+  } else car.air = true;
+  car.airT = damp(car.airT || 0, car.air ? 1 : 0, 9, dt);
+  car.vy += acc * dt;
+
+
+  car.vy = clamp(car.vy, -45, 20);
+  car.y += car.vy * dt;
+  if (car.y < restY - 0.26) {
+    car.y = restY - 0.26;
+    if (car.vy < 0) {
+      car.landImpact = Math.min(1, -car.vy / 9);
+      car.vy *= -0.16;
+    }
+  }
+
+
+
+
+
+
+
+
+  const hardFloor = gnd.max - 0.10;
+  if (car.y < hardFloor) {
+    car.y = hardFloor;
+    if (car.vy < 0) car.vy = 0;
+    car.air = false;
+  }
+
+
+
+
+
+  if (!Number.isFinite(car.y) || !Number.isFinite(car.vy) ||
+    !Number.isFinite(car.s) || !Number.isFinite(car.n) || !Number.isFinite(car.yaw)) {
+    console.warn('[nightdrive] non-finite car state, recovering');
+    car.s = Number.isFinite(car.s) ? car.s : 0;
+    car.n = 0;
+    car.yaw = 0;
+    car.vLong = 0;
+    car.vLat = 0;
+    car.omega = 0;
+    settleSuspension();
+  }
+
+
+  const accelLong = car.ax;
+  const accelLat = ((FyF + FyR) / CARP.m);
+
+
+  const geoPitch = clamp(Math.atan2(gnd.front - gnd.rear, CARP.lf + CARP.lr), -0.22, 0.22);
+  const geoRoll = clamp(Math.atan2(gnd.left - gnd.right, 1.73), -0.20, 0.20);
   
-}
+
+
