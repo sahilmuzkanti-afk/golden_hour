@@ -4881,6 +4881,24 @@ let clock = 0;
 function beginMilestone() {
   if (milestoneStarted) return;
   milestoneStarted = true;
+
+  car.vLong = 0;
+  car.vLat = 0;
+  car.omega = 0;
+  car.ax = 0;
+  car.steer = 0;
+  car.steerVis = 0;
+  car.slip = 0;
+  car.screech = 0;
+  car.landImpact = 0;
+  input.th = 0;
+  input.br = 0;
+  input.st = 0;
+  input.hb = 0;
+  input.bo = false;
+  settleSuspension();
+  placeMilestoneCar();
+  spawnLock = 1.0;
   milestoneStart.classList.add('hide');
   document.getElementById('hud').classList.add('on');
   setTimeout(() => {
