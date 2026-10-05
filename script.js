@@ -4863,7 +4863,10 @@ function updateMilestoneWorld() {
 }
 
 
-const milestoneKeys = {};
+const milestoneKeys = KEYS_DOWN;
+let autoDrive = false;
+let spawnLock = 0;
+function boostWhoosh() {}
 const milestoneStart = document.getElementById('start');
 const milestoneSpeed = document.getElementById('speed');
 const milestoneDistance = document.getElementById('dist');
@@ -4886,15 +4889,37 @@ function beginMilestone() {
 }
 
 function readMilestoneInput(dt) {
-  const throttle = milestoneKeys.KeyW || milestoneKeys.ArrowUp;
-  const brake = milestoneKeys.KeyS || milestoneKeys.ArrowDown;
-  const left = milestoneKeys.KeyA || milestoneKeys.ArrowLeft;
-  const right = milestoneKeys.KeyD || milestoneKeys.ArrowRight;
-  input.th = damp(input.th, throttle ? 1 : 0, 9, dt);
-  input.br = damp(input.br, brake ? 1 : 0, 13, dt);
-  input.st = damp(input.st, (left ? 1 : 0) - (right ? 1 : 0), 8, dt);
-  input.hb = milestoneKeys.Space ? 1 : 0;
-  input.bo = !!(milestoneKeys.ShiftLeft || milestoneKeys.ShiftRight);
+  if (autoDrive) {
+    autopilot();
+    return;
+  }
+  if (spawnLock > 0) {
+    spawnLock -= dt;
+    input.th = 0;
+    input.br = 0;
+    input.st = 0;
+    input.hb = 0;
+    input.bo = false;
+    return;
+  }
+  const K = KEYS_DOWN;
+  const up = K['KeyW'] || K['ArrowUp'];
+  const down = K['KeyS'] || K['ArrowDown'];
+  const left = K['KeyA'] || K['ArrowLeft'];
+  const right = K['KeyD'] || K['ArrowRight'];
+  input.th = damp(input.th, up ? 1 : 0, 9, dt);
+  input.br = damp(input.br, down ? 1 : 0, 13, dt);
+
+  const stT = (left ? 1 : 0) + (right ? -1 : 0);
+
+  const rate = stT === 0 ? 12.0 :
+    stT * input.st < -0.02 ? 15.0 :
+    6.0 - Math.min(Math.abs(car.vLong) * 0.125, 4.0);
+  input.st = damp(input.st, stT, rate, dt);
+  input.hb = K['Space'] ? 1 : 0;
+  const bo = !!(K['ShiftLeft'] || K['ShiftRight']);
+  if (bo && !input.bo && car.boost > 0.05) boostWhoosh();
+  input.bo = bo;
 }
 
 function updateMilestoneCamera(dt, frame) {
