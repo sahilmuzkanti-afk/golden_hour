@@ -5020,6 +5020,123 @@ function camFlash() {
   toast(CAMS[camMode].name);
 }
 
+function updateCamera(dt) {
+  const M = CAMS[camMode];
+  const spd = Math.abs(car.vLong);
+  const spdN = clamp(spd / 72, 0, 1);
+  const b = car.boostAmt;
+
+  if (M.id === 'hood') {
+    hoodCam(dt, spdN, b);
+    return;
+  }
+  if (M.id === 'pit') {
+    cockpitCam(dt, spdN, b);
+    return;
+  }
+  if (M.id === 'orbit') {
+    orbitCam(dt, spdN, b);
+    return;
+  }
+
+  const f = frameAt(car.s);
+
+  const slipRaw = clamp(Math.atan2(car.vLat, Math.max(3, Math.abs(car.vLong))), -0.55, 0.55);
+  cam.slipYaw = damp(cam.slipYaw, slipRaw * 0.55, 7, dt);
+  const worldYaw = f.h + car.yaw - cam.slipYaw;
+
+  let dist = M.dist + spdN * 2.3 + b * 3.0;
+  const high = M.high + spdN * 0.42 + b * 0.24;
+
+  roadToWorld(car.s, car.n, _cp);
+  const cx = Math.cos(worldYaw),
+    sx = Math.sin(worldYaw);
+
+  for (let i = 0; i < 4; i++) {
+    if (groundYAt(_cp.x - sx * dist, _cp.z - cx * dist) + 1.0 <= car.y + high) break;
+    dist *= 0.78;
+    if (dist < M.dist * 0.42) {
+      dist = M.dist * 0.42;
+      break;
+    }
+  }
+  _ct.set(_cp.x - sx * dist, car.y + high, _cp.z - cx * dist);
+
+  if (!cam.init) {
+    _ctPrev.copy(_ct);
+    cam.init = true;
+  }
+  _anchorVel.copy(_ct).sub(_ctPrev).divideScalar(Math.max(dt, 1e-4));
+  _ctPrev.copy(_ct);
+  if (_anchorVel.lengthSq() > 40000) _anchorVel.set(0, 0, 0);
+
+  const k = 34 + spdN * 14;
+  const dmp = 2 * Math.sqrt(k) * 0.95;
+  _tmp.copy(_ct).sub(cam.pos).multiplyScalar(k);
+  _relVel.copy(cam.vel).sub(_anchorVel);
+  _tmp.addScaledVector(_relVel, -dmp);
+  cam.vel.addScaledVector(_tmp, dt);
+  cam.pos.addScaledVector(cam.vel, dt);
+
+  const gy = groundYAt(cam.pos.x, cam.pos.z) + 0.95;
+  if (cam.pos.y < gy) {
+    cam.pos.y = gy;
+    cam.vel.y = Math.max(cam.vel.y, 0);
+  }
+
+  const band = 1 + car.airT * 4.0;
+  const yLo = car.y + 0.85 - car.airT * 3.0,
+    yHi = car.y + high + 1.7 * band;
+  if (cam.pos.y < yLo) {
+    cam.pos.y = yLo;
+    cam.vel.y = Math.max(cam.vel.y, 0);
+  }
+  if (cam.pos.y > yHi) {
+    cam.pos.y = yHi;
+    cam.vel.y = Math.min(cam.vel.y, 0);
+  }
+
+  const lead = (M.lead + spdN * 24 + b * 13) * (1 - car.airT * 0.42);
+  roadToWorld(car.s + lead, car.n * 0.55, _tmp);
+  _tmp.y = car.y + 1.35 + clamp(_tmp.y - car.y, -3.5, 3.5) * 0.22;
+
+  if (car.airT > 0.004) {
+    const wy = f.h + car.yaw - cam.slipYaw * 0.5;
+    const aLead = 7.0 + spdN * 9.0;
+    _airAim.set(_cp.x + Math.sin(wy) * aLead,
+      car.y + 1.25 + clamp(car.vy, -14, 14) * 0.34,
+      _cp.z + Math.cos(wy) * aLead);
+    _tmp.lerp(_airAim, smooth(0, 0.85, car.airT) * 0.90);
+  }
+  cam.look.lerp(_tmp, 1 - Math.exp(-(9 + car.airT * 7) * dt));
+  frameCar(0.58 - car.airT * 0.16);
+
+  camera.position.copy(cam.pos);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(cam.look);
+
+  const latG = clamp((car.omega * Math.max(spd, 1)) / 13, -1, 1);
+  const targetRoll = (-latG * 0.10 - clamp(car.vLat / 26, -0.5, 0.5) * 0.10) * M.tilt;
+  cam.roll = damp(cam.roll, targetRoll, 5.5, dt);
+  camera.rotateZ(cam.roll);
+
+  const shakeAmt = spdN * spdN * 0.34 + b * 0.42 + car.rough * 0.55 + car.landImpact * 1.4 + car.screech * 0.16;
+  cam.shake = damp(cam.shake, shakeAmt, 12, dt);
+  if (cam.shake > 0.001) {
+    const t = clock * 37;
+    camera.rotateX((vnoise(t, 1.7)) * 0.0042 * cam.shake);
+    camera.rotateY((vnoise(t * 1.13, 9.3)) * 0.0048 * cam.shake);
+    camera.rotateZ((vnoise(t * 0.87, 4.1)) * 0.0035 * cam.shake);
+  }
+
+  const fovT = M.fov + spdN * 6.0 + b * 9.5 + car.screech * 1.8;
+  cam.fov = damp(cam.fov, fovT, 4.2, dt);
+  if (Math.abs(camera.fov - cam.fov) > 0.01) {
+    camera.fov = cam.fov;
+    camera.updateProjectionMatrix();
+  }
+}
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
