@@ -4782,7 +4782,8 @@ function stepPhysics(dt) {
   if (stepHook) stepHook(gnd);
 }
 
-let stepHook = null;
+let stepHook = null,
+  camHook = null;
 
 function surfaceAt(s, n) {
   const f = frameAt(s);
@@ -4834,7 +4835,119 @@ function sampleWheels() {
   };
 }
 
-const milestoneCarPosition = new THREE.Vector3();
+const _carPos = new THREE.Vector3();
+const _wp = {
+  x: 0,
+  y: 0,
+  z: 0
+};
+
+const cam = {
+  pos: new THREE.Vector3(0, 6, -14),
+  vel: new THREE.Vector3(),
+  look: new THREE.Vector3(),
+  lookVel: new THREE.Vector3(),
+  fov: 62,
+  roll: 0,
+  shake: 0,
+  slipYaw: 0,
+};
+
+const _cp = new THREE.Vector3(),
+  _ct = new THREE.Vector3(),
+  _tmp = new THREE.Vector3();
+
+const _ctPrev = new THREE.Vector3(),
+  _anchorVel = new THREE.Vector3(),
+  _relVel = new THREE.Vector3();
+
+const _aim = new THREE.Vector3(),
+  _toCar = new THREE.Vector3();
+
+const _airAim = new THREE.Vector3();
+
+const _frV = new THREE.Vector3(),
+  _frF = new THREE.Vector3();
+
+function framing() {
+  const p = _frV.set(carRoot.position.x, car.y + 0.55, carRoot.position.z);
+  const dx = p.x - camera.position.x,
+    dy = p.y - camera.position.y,
+    dz = p.z - camera.position.z;
+  const dist = Math.hypot(dx, dy, dz) || 1e-6;
+  camera.updateMatrixWorld();
+  _frF.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  const cosA = (dx * _frF.x + dy * _frF.y + dz * _frF.z) / dist;
+  const ang = Math.acos(clamp(cosA, -1, 1));
+  const halfV = camera.fov * 0.5 * Math.PI / 180;
+  p.project(camera);
+  return {
+    dist,
+    ang,
+    frac: ang / halfV,
+    x: p.x,
+    y: p.y,
+    z: p.z,
+    onScreen: Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && p.z > -1 && p.z < 1
+  };
+}
+
+function frameCar(frac) {
+  _aim.copy(cam.look).sub(cam.pos);
+  const aimLen = _aim.length();
+  if (aimLen < 1e-3) return;
+  _aim.divideScalar(aimLen);
+  _toCar.set(_carPos.x, car.y + 0.55, _carPos.z).sub(cam.pos);
+  const carLen = _toCar.length();
+  if (carLen < 1e-3) return;
+  _toCar.divideScalar(carLen);
+  const ang = Math.acos(clamp(_aim.dot(_toCar), -1, 1));
+  const maxAng = cam.fov * 0.5 * Math.PI / 180 * frac;
+  if (!(ang > maxAng)) return;
+  _aim.lerp(_toCar, (ang - maxAng) / ang).normalize();
+  cam.look.copy(cam.pos).addScaledVector(_aim, aimLen);
+}
+
+function camSnap() {
+  const f = frameAt(car.s);
+  const worldYaw = f.h + car.yaw;
+  roadToWorld(car.s, car.n, _cp);
+  cam.pos.set(_cp.x - Math.sin(worldYaw) * 8.6, car.y + 3.1, _cp.z - Math.cos(worldYaw) * 8.6);
+  cam.vel.set(0, 0, 0);
+  roadToWorld(car.s + 18, car.n * 0.55, cam.look);
+  cam.look.y += 1.55;
+  _ctPrev.copy(cam.pos);
+  cam.init = true;
+  cam.roll = 0;
+  cam.shake = 0;
+  cam.slipYaw = 0;
+  camera.position.copy(cam.pos);
+  camera.lookAt(cam.look);
+}
+
+let dialTach = 0,
+  dialSpeed = 0;
+
+function updateCockpit(dt) {
+  if (!cockpit.visible) return;
+  const SW = Math.PI * 1.5,
+    A0 = Math.PI * 0.75;
+  dialTach = damp(dialTach, clamp(car.rpm / 8000, 0, 1.02), 11, dt);
+  dialSpeed = damp(dialSpeed, clamp(Math.abs(car.vLong) * 3.6 / 320, 0, 1.02), 5.5, dt);
+
+  if (DIAL.tach) DIAL.tach.rotation.z = -(A0 + SW * dialTach - Math.PI / 2);
+  if (DIAL.speedo) DIAL.speedo.rotation.z = -(A0 + SW * dialSpeed - Math.PI / 2);
+
+  wheelSpin.rotation.z = -car.steerVis * 3.6;
+}
+
+function setCockpitVisible(on) {
+  cockpit.visible = on;
+
+  stubInterior.visible = !on;
+}
+
+const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
   const f = frameAt(car.s);
