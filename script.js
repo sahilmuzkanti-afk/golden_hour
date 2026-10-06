@@ -5137,6 +5137,127 @@ function updateCamera(dt) {
   }
 }
 
+function hoodCam(dt, spdN, b) {
+  const M = CAMS[camMode];
+  const f = frameAt(car.s);
+  const wy = f.h + car.yaw;
+  roadToWorld(car.s, car.n, _cp);
+  const fwd = 1.05;
+  cam.pos.set(_cp.x + Math.sin(wy) * fwd, car.y + M.high + car.ride * 0.5, _cp.z + Math.cos(wy) * fwd);
+  camera.position.copy(cam.pos);
+  camera.up.set(0, 1, 0);
+  roadToWorld(car.s + M.lead + spdN * 26, car.n * 0.5, _tmp);
+  _tmp.y += 1.1;
+  cam.look.lerp(_tmp, 1 - Math.exp(-14 * dt));
+  camera.lookAt(cam.look);
+  cam.roll = damp(cam.roll, (car.roll * 1.5 + clamp(car.vLat / 24, -0.5, 0.5) * -0.10) * M.tilt, 8, dt);
+  camera.rotateZ(cam.roll);
+  camera.rotateX(-car.pitch * 0.7);
+  const fovT = M.fov + spdN * 5.0 + b * 8.0;
+  cam.fov = damp(cam.fov, fovT, 5.0, dt);
+  camera.fov = cam.fov;
+  camera.updateProjectionMatrix();
+  cam.vel.set(0, 0, 0);
+  _ctPrev.copy(cam.pos);
+}
+
+const EYE = new THREE.Vector3(-0.31, 0.985, -0.235);
+
+const _eye = new THREE.Vector3(),
+  _nose = new THREE.Vector3();
+
+function cockpitCam(dt, spdN, b) {
+  const M = CAMS[camMode];
+
+  carBody.updateWorldMatrix(true, false);
+  _eye.copy(EYE).applyMatrix4(carBody.matrixWorld);
+  cam.pos.copy(_eye);
+  camera.position.copy(cam.pos);
+  camera.up.set(0, 1, 0);
+
+  const f = frameAt(car.s);
+  const wy = f.h + car.yaw;
+  const lead = M.lead + spdN * 22;
+  roadToWorld(car.s, car.n, _cp);
+  _nose.set(_cp.x + Math.sin(wy) * lead, 0, _cp.z + Math.cos(wy) * lead);
+  roadToWorld(car.s + lead, car.n * 0.45, _tmp);
+  _tmp.y = car.y + 1.18 + clamp(_tmp.y - car.y, -3.0, 3.0) * 0.35;
+  _tmp.x = lerp(_nose.x, _tmp.x, 0.30);
+  _tmp.z = lerp(_nose.z, _tmp.z, 0.30);
+  cam.look.lerp(_tmp, 1 - Math.exp(-13 * dt));
+  camera.lookAt(cam.look);
+
+  cam.roll = damp(cam.roll, (car.roll * 1.2 + clamp(car.vLat / 26, -0.5, 0.5) * -0.09) * M.tilt, 9, dt);
+  camera.rotateZ(cam.roll);
+  camera.rotateX(-car.pitch * 0.55);
+  cam.fov = damp(cam.fov, M.fov + spdN * 4.5 + b * 7.0, 5.0, dt);
+  camera.fov = cam.fov;
+  camera.updateProjectionMatrix();
+  cam.vel.set(0, 0, 0);
+  _ctPrev.copy(cam.pos);
+}
+
+function orbitCam(dt, spdN, b) {
+  const M = CAMS[camMode];
+  orbitAz += dt * 0.20;
+  const back = 4.9 + (Math.sin(orbitAz * 0.73) * 0.5 + 0.5) * 4.4;
+  const side = Math.sin(orbitAz) * 6.1;
+  const h = 1.70 + (Math.sin(orbitAz * 0.51) * 0.5 + 0.5) * 1.55;
+  roadToWorld(car.s, car.n, _cp);
+  roadToWorld(car.s - back, clamp(car.n + side, -7.2, 7.2), _ct);
+  _ct.y = car.y + h;
+  cam.pos.lerp(_ct, 1 - Math.exp(-5 * dt));
+  const gy = groundYAt(cam.pos.x, cam.pos.z) + 0.85;
+  if (cam.pos.y < gy) cam.pos.y = gy;
+  camera.position.copy(cam.pos);
+  camera.up.set(0, 1, 0);
+  _tmp.set(_cp.x, car.y + 0.70, _cp.z);
+  cam.look.lerp(_tmp, 1 - Math.exp(-8 * dt));
+  camera.lookAt(cam.look);
+  cam.roll = damp(cam.roll, 0, 4, dt);
+  cam.fov = damp(cam.fov, M.fov + spdN * 4.0 + b * 4.0, 4, dt);
+  camera.fov = cam.fov;
+  camera.updateProjectionMatrix();
+  cam.vel.set(0, 0, 0);
+  _ctPrev.copy(cam.pos);
+}
+
+let camLock = null;
+
+function applyCamLock() {
+  if (!camLock) return;
+  const f = frameAt(car.s);
+  roadToWorld(car.s, car.n, _cp);
+  const yaw = f.h + car.yaw + camLock.az;
+  const d = camLock.dist;
+  camera.position.set(_cp.x - Math.sin(yaw) * d, car.y + camLock.height, _cp.z - Math.cos(yaw) * d);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(_cp.x, car.y + (camLock.aim === undefined ? 0.62 : camLock.aim), _cp.z);
+  camera.fov = camLock.fov || 42;
+  camera.updateProjectionMatrix();
+}
+
+function groundYAt(x, z) {
+  const q = nearestRoad(x, z, 26);
+  if (q.d < 12) return q.y;
+  return terrainHeight(x, z);
+}
+
+const TRAIL_SEG = 190;
+
+const trailMat = new THREE.MeshBasicMaterial({
+  color: 0x11100f,
+  transparent: true,
+  opacity: 0.62,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -6,
+  polygonOffsetUnits: -6,
+  fog: true
+});
+
+const trails = [];
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
@@ -5205,6 +5326,7 @@ function beginMilestone() {
   input.bo = false;
   settleSuspension();
   placeMilestoneCar();
+  camSnap();
   spawnLock = 1.0;
   milestoneStart.classList.add('hide');
   document.getElementById('hud').classList.add('on');
@@ -5303,7 +5425,7 @@ function milestoneFrame(now) {
     wh.spin.rotation.x = car.wheelSpin * (wh.r === WHEEL.fr ? WHEEL.rr / WHEEL.fr : 1);
     if (wh.steer) wh.pivot.rotation.y = car.steer * 0.92;
   }
-  updateMilestoneCamera(dt, frame);
+  updateCamera(dt);
   applySky(dt, camera.position);
   updateMilestoneHud();
   renderer.render(scene, camera);
@@ -5320,5 +5442,5 @@ updateMilestoneWorld();
 drainQueue(600, 12);
 settleSuspension();
 placeMilestoneCar();
-camera.position.set(0, car.y + 4.2, -10);
+camSnap();
 requestAnimationFrame(milestoneFrame);
