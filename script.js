@@ -4947,6 +4947,79 @@ function setCockpitVisible(on) {
   stubInterior.visible = !on;
 }
 
+const CAMS = [{
+    id: 'chase',
+    name: 'CHASE',
+    dist: 6.7,
+    high: 2.28,
+    lead: 16,
+    fov: 60,
+    tilt: 1.00
+  },
+  {
+    id: 'far',
+    name: 'WIDE',
+    dist: 11.4,
+    high: 4.35,
+    lead: 27,
+    fov: 52,
+    tilt: 0.65
+  },
+  {
+    id: 'near',
+    name: 'CLOSE',
+    dist: 5.7,
+    high: 1.98,
+    lead: 14,
+    fov: 64,
+    tilt: 1.25
+  },
+  {
+    id: 'hood',
+    name: 'HOOD',
+    dist: 0,
+    high: 1.14,
+    lead: 34,
+    fov: 70,
+    tilt: 1.35
+  },
+  {
+    id: 'pit',
+    name: 'COCKPIT',
+    dist: 0,
+    high: 1.00,
+    lead: 30,
+    fov: 62,
+    tilt: 0.55
+  },
+  {
+    id: 'orbit',
+    name: 'CINEMATIC',
+    dist: 8.6,
+    high: 2.55,
+    lead: 0,
+    fov: 44,
+    tilt: 0.00
+  },
+];
+
+let camMode = 0,
+  orbitAz = 0,
+  camTagT = null;
+
+function toast(text) {
+  const el = document.getElementById('camTag');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(camTagT);
+  camTagT = setTimeout(() => el.classList.remove('show'), 1300);
+}
+
+function camFlash() {
+  toast(CAMS[camMode].name);
+}
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
