@@ -4789,44 +4789,48 @@ function surfaceAt(s, n) {
   const road = roadSurfaceY(f, n);
   const an = Math.abs(n);
   if (an <= RD.half + 0.5) return road;
-  const cs = Math.cos(f.h);
-  const sn = Math.sin(f.h);
-  const terrain = terrainHeight(f.x + cs * n, f.z - sn * n);
-  return lerp(road, terrain, smooth(RD.half + 0.5, RD.verge + 3.5, an));
+  const cs = Math.cos(f.h),
+    sn = Math.sin(f.h);
+  const terr = terrainHeight(f.x + cs * n, f.z - sn * n);
+  return lerp(road, terr, smooth(RD.half + 0.5, RD.verge + 3.5, an));
 }
 
 function sampleWheels() {
-  const cy = Math.cos(car.yaw);
-  const sy = Math.sin(car.yaw);
-  let front = 0;
-  let rear = 0;
-  let left = 0;
-  let right = 0;
-  let average = 0;
-  let minimum = Infinity;
-  let maximum = -Infinity;
+  const cy = Math.cos(car.yaw),
+    sy = Math.sin(car.yaw);
+  let front = 0,
+    rear = 0,
+    left = 0,
+    right = 0,
+    sum = 0,
+    mn = 1e9,
+    mx = -1e9;
   for (let i = 0; i < 4; i++) {
-    const wheel = WPOS[i];
-    const ds = wheel[1] * cy - wheel[0] * sy;
-    const dn = wheel[1] * sy + wheel[0] * cy;
-    const height = surfaceAt(car.s + ds, car.n + dn);
-    if (i < 2) front += height * 0.5;
-    else rear += height * 0.5;
-    if (wheel[0] > 0) left += height * 0.5;
-    else right += height * 0.5;
-    average += height * 0.25;
-    minimum = Math.min(minimum, height);
-    maximum = Math.max(maximum, height);
+    const w = WPOS[i];
+    const lx = w[0],
+      lz = w[1];
+    const dsW = lz * cy - lx * sy;
+    const dnW = lz * sy + lx * cy;
+    const s = car.s + dsW,
+      n = car.n + dnW;
+    const h = surfaceAt(s, n);
+    if (i < 2) front += h * 0.5;
+    else rear += h * 0.5;
+    if (w[0] > 0) left += h * 0.5;
+    else right += h * 0.5;
+    sum += h * 0.25;
+    if (h < mn) mn = h;
+    if (h > mx) mx = h;
   }
   return {
-    avg: average,
+    avg: sum,
     front,
     rear,
     left,
     right,
-    min: minimum,
-    max: maximum,
-    rough: clamp((maximum - minimum) * 1.6, 0, 1)
+    min: mn,
+    max: mx,
+    rough: clamp((mx - mn) * 1.6, 0, 1)
   };
 }
 
@@ -4992,6 +4996,10 @@ function milestoneFrame(now) {
     drainQueue(5, 2);
   }
   const frame = placeMilestoneCar();
+  for (const wh of wheelHub) {
+    wh.spin.rotation.x = car.wheelSpin * (wh.r === WHEEL.fr ? WHEEL.rr / WHEEL.fr : 1);
+    if (wh.steer) wh.pivot.rotation.y = car.steer * 0.92;
+  }
   updateMilestoneCamera(dt, frame);
   applySky(dt, camera.position);
   updateMilestoneHud();
