@@ -5258,6 +5258,112 @@ const trailMat = new THREE.MeshBasicMaterial({
 
 const trails = [];
 
+for (let w = 0; w < 2; w++) {
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array((TRAIL_SEG + 1) * 2 * 3);
+  const alp = new Float32Array((TRAIL_SEG + 1) * 2);
+  const idx = [];
+  for (let i = 0; i < TRAIL_SEG; i++) {
+    const a = i * 2,
+      b = a + 1,
+      c = a + 2,
+      d = a + 3;
+    idx.push(a, c, b, b, c, d);
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aAlpha', new THREE.BufferAttribute(alp, 1));
+  g.setIndex(idx);
+  g.setDrawRange(0, 0);
+  const m = trailMat.clone();
+  m.onBeforeCompile = fogPatch(sh => {
+    sh.vertexShader = 'attribute float aAlpha; varying float vA;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vA=aAlpha;');
+    sh.fragmentShader = 'varying float vA;\n' + sh.fragmentShader
+      .replace('#include <opaque_fragment>', 'diffuseColor.a *= vA;\n#include <opaque_fragment>');
+  });
+  m.customProgramCacheKey = () => 'trail';
+  const mesh = new THREE.Mesh(g, m);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 2;
+  scene.add(mesh);
+  trails.push({
+    mesh,
+    g,
+    pos,
+    alp,
+    head: 0,
+    count: 0,
+    last: null
+  });
+}
+
+function trailReset() {
+  for (const t of trails) {
+    t.head = 0;
+    t.count = 0;
+    t.last = null;
+    t.alp.fill(0);
+    t.g.setDrawRange(0, 0);
+  }
+}
+
+function trailPush(ti, p, right, strength) {
+  const t = trails[ti];
+  const i = t.head;
+  const hw = 0.13;
+  const o = i * 6;
+  t.pos[o] = p.x - right.x * hw;
+  t.pos[o + 1] = p.y + 0.012;
+  t.pos[o + 2] = p.z - right.z * hw;
+  t.pos[o + 3] = p.x + right.x * hw;
+  t.pos[o + 4] = p.y + 0.012;
+  t.pos[o + 5] = p.z + right.z * hw;
+  t.alp[i * 2] = strength;
+  t.alp[i * 2 + 1] = strength;
+  t.head = (t.head + 1) % (TRAIL_SEG + 1);
+  t.count = Math.min(t.count + 1, TRAIL_SEG);
+
+  const nx = t.head;
+  t.alp[nx * 2] = 0;
+  t.alp[nx * 2 + 1] = 0;
+  t.g.attributes.position.needsUpdate = true;
+  t.g.attributes.aAlpha.needsUpdate = true;
+  t.g.setDrawRange(0, TRAIL_SEG * 6);
+}
+
+function trailFade(dt) {
+  for (const t of trails) {
+    let any = false;
+    for (let i = 0; i < t.alp.length; i++) {
+      if (t.alp[i] > 0) {
+        t.alp[i] = Math.max(0, t.alp[i] - dt * 0.055);
+        any = true;
+      }
+    }
+    if (any) t.g.attributes.aAlpha.needsUpdate = true;
+  }
+}
+
+const PN = 900;
+
+const pGeo = new THREE.BufferGeometry();
+
+const pPos = new Float32Array(PN * 3),
+  pCol = new Float32Array(PN * 3),
+  pSize = new Float32Array(PN);
+
+const pVel = new Float32Array(PN * 3),
+  pLife = new Float32Array(PN),
+  pMax = new Float32Array(PN);
+
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+
+pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+
+pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
+
+pGeo.setAttribute('aLife', new THREE.BufferAttribute(pLife, 1));
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
