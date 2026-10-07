@@ -5364,6 +5364,105 @@ pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
 
 pGeo.setAttribute('aLife', new THREE.BufferAttribute(pLife, 1));
 
+const pMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTex: {
+      value: softSprite
+    },
+    uPix: {
+      value: 1
+    }
+  },
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.NormalBlending,
+  vertexColors: true,
+  vertexShader: `attribute float aSize; attribute float aLife; varying vec3 vC; varying float vL;
+    uniform float uPix; varying float vZ;
+    void main(){ vC=color; vL=aLife;
+      vec4 mv=modelViewMatrix*vec4(position,1.0);
+      vZ = -mv.z;
+      gl_Position=projectionMatrix*mv;
+      
+      gl_PointSize = clamp(aSize*uPix / max(-mv.z, 2.4) * 260.0, 1.0, 42.0*uPix); }`,
+  fragmentShader: `uniform sampler2D uTex; varying vec3 vC; varying float vL;
+    varying float vZ;
+    void main(){ float a=texture2D(uTex,gl_PointCoord).a;
+      if(vL<=0.0) discard;
+      
+
+
+
+
+
+
+      gl_FragColor=vec4(vC, a*vL*0.46*smoothstep(1.0, 4.4, vZ)); }`
+});
+
+const points = new THREE.Points(pGeo, pMat);
+
+points.frustumCulled = false;
+
+scene.add(points);
+
+let pHead = 0;
+
+function emit(x, y, z, vx, vy, vz, size, life, col) {
+  const i = pHead;
+  pHead = (pHead + 1) % PN;
+  pPos[i * 3] = x;
+  pPos[i * 3 + 1] = y;
+  pPos[i * 3 + 2] = z;
+  pVel[i * 3] = vx;
+  pVel[i * 3 + 1] = vy;
+  pVel[i * 3 + 2] = vz;
+  pSize[i] = size;
+  pLife[i] = 1;
+  pMax[i] = life;
+  pCol[i * 3] = col.r;
+  pCol[i * 3 + 1] = col.g;
+  pCol[i * 3 + 2] = col.b;
+}
+
+function stepParticles(dt) {
+  for (let i = 0; i < PN; i++) {
+    if (pLife[i] <= 0) continue;
+    pLife[i] -= dt / pMax[i];
+    if (pLife[i] < 0) pLife[i] = 0;
+    pPos[i * 3] += pVel[i * 3] * dt;
+    pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+    pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+    pVel[i * 3] *= (1 - 1.5 * dt);
+    pVel[i * 3 + 1] += (0.55 - 2.0 * dt) * dt;
+    pVel[i * 3 + 2] *= (1 - 1.5 * dt);
+    pSize[i] += dt * 1.5;
+  }
+  pGeo.attributes.position.needsUpdate = true;
+  pGeo.attributes.aLife.needsUpdate = true;
+  pGeo.attributes.aSize.needsUpdate = true;
+  pGeo.attributes.color.needsUpdate = true;
+}
+
+const _H = (location.hash || '').toLowerCase();
+
+const _wantMSAA = _H.includes('msaa') && !_H.includes('nomsaa');
+
+const rtParams = {
+  type: THREE.HalfFloatType,
+  samples: _wantMSAA ? 4 : 0
+};
+
+const composerRT = new THREE.WebGLRenderTarget(
+  renderer.domElement.width, renderer.domElement.height, rtParams);
+
+const composer = new EffectComposer(renderer, composerRT);
+
+composer.setPixelRatio(1);
+
+const renderPass = new RenderPass(scene, camera);
+
+composer.addPass(renderPass);
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
