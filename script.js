@@ -5598,6 +5598,132 @@ class GodRaysPass extends Pass {
   }
 }
 
+const godRays = new GodRaysPass(innerWidth, innerHeight);
+
+composer.addPass(godRays);
+
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.72, 0.62, 0.72);
+
+composer.addPass(bloom);
+
+composer.addPass(new OutputPass());
+
+const CompositeShader = {
+  uniforms: {
+    tDiffuse: {
+      value: null
+    },
+    uTime: {
+      value: 0
+    },
+    uRes: {
+      value: new THREE.Vector2(1, 1)
+    },
+    uBlur: {
+      value: 0
+    },
+    uCA: {
+      value: 0.0016
+    },
+    uGrain: {
+      value: 0.030
+    },
+    uVign: {
+      value: 0.62
+    },
+    uSat: {
+      value: 1.06
+    },
+    uContrast: {
+      value: 1.18
+    },
+    uLift: {
+      value: new THREE.Vector3(0.002, 0.003, 0.007)
+    },
+    uGain: {
+      value: new THREE.Vector3(1, 1, 1)
+    },
+    uShad: {
+      value: new THREE.Vector3(1, 1, 1)
+    },
+    uLines: {
+      value: 0
+    },
+    uFlash: {
+      value: 0
+    },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float uTime, uBlur, uCA, uGrain, uVign, uSat, uContrast, uLines, uFlash;
+    uniform vec2 uRes; uniform vec3 uLift, uGain, uShad;
+    varying vec2 vUv;
+    float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    void main(){
+      vec2 dir = vUv - 0.5;
+      float d = length(dir);
+
+      
+      float ca = uCA * d * d * 3.4;
+      vec3 col;
+      col.r = texture2D(tDiffuse, vUv - dir*ca).r;
+      col.g = texture2D(tDiffuse, vUv         ).g;
+      col.b = texture2D(tDiffuse, vUv + dir*ca).b;
+
+      
+      if(uBlur > 0.0012){
+        float amt = uBlur * smoothstep(0.04, 0.78, d);
+        vec3 acc = col; float sum = 1.0;
+        for(int i=1;i<8;i++){
+          float t = float(i)/7.0;
+          float w = 1.0 - t*0.62;
+          acc += texture2D(tDiffuse, vUv - dir*(t*amt)).rgb * w;
+          sum += w;
+        }
+        col = acc/sum;
+      }
+
+      
+      float l = dot(col, vec3(0.2126,0.7152,0.0722));
+      col = mix(vec3(l), col, uSat);
+      
+      col *= mix(uShad, uGain, smoothstep(0.06, 0.68, l));
+      col = (col - 0.5)*uContrast + 0.5;
+      col += uLift*(1.0 - smoothstep(0.0, 0.55, l));
+      
+      
+      col = max(col - 0.014, 0.0) / (1.0 - 0.014);
+      col = clamp(col, 0.0, 4.0);
+      col = mix(col, col*col*(3.0-2.0*col), 0.34);
+
+      
+      if(uLines > 0.002){
+        float a = atan(dir.y, dir.x);
+        float seed = floor(a*34.0);
+        float rnd = h21(vec2(seed, 3.0));
+        float m = fract(rnd*7.31 + uTime*1.9 - d*1.25);
+        float streak = smoothstep(0.52, 1.0, d) * step(0.63, rnd);
+        streak *= smoothstep(0.0,0.22,m)*smoothstep(1.0,0.55,m);
+        col += vec3(1.0,0.93,0.84) * streak * uLines * 0.42;
+      }
+
+      
+      col *= mix(1.0, smoothstep(0.95, 0.26, d), uVign);
+
+      
+      float g = h21(vUv*uRes + uTime*131.0);
+      col += (g-0.5)*uGrain*(1.0 - 0.55*l);
+
+      col = mix(col, vec3(1.0), uFlash);
+      gl_FragColor = vec4(col, 1.0);
+    }`
+};
+
+const compositePass = new ShaderPass(CompositeShader);
+
+composer.addPass(compositePass);
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
