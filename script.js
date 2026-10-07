@@ -5463,6 +5463,141 @@ const renderPass = new RenderPass(scene, camera);
 
 composer.addPass(renderPass);
 
+class GodRaysPass extends Pass {
+  constructor(w, h) {
+    super();
+    const o = {
+      type: THREE.HalfFloatType,
+      depthBuffer: false,
+      stencilBuffer: false
+    };
+    this.rtA = new THREE.WebGLRenderTarget(Math.max(2, w >> 2), Math.max(2, h >> 2), o);
+    this.rtB = new THREE.WebGLRenderTarget(Math.max(2, w >> 2), Math.max(2, h >> 2), o);
+    const vs = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`;
+    this.prep = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: {
+          value: null
+        },
+        uSun: {
+          value: new THREE.Vector2(0.5, 0.5)
+        },
+        uThr: {
+          value: 3.6
+        }
+      },
+      vertexShader: vs,
+      fragmentShader: `
+        uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uThr; varying vec2 vUv;
+        void main(){
+          vec3 c = texture2D(tDiffuse, vUv).rgb;
+          float l = dot(c, vec3(0.2126,0.7152,0.0722));
+          float m = smoothstep(uThr, uThr*2.4, l);
+          float d = distance(vUv, uSun);
+          m *= 1.0 - smoothstep(0.06, 0.85, d);
+          gl_FragColor = vec4(c*m, 1.0);
+        }`
+    });
+    this.blur = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: {
+          value: null
+        },
+        uSun: {
+          value: new THREE.Vector2(0.5, 0.5)
+        },
+        uDensity: {
+          value: 0.62
+        },
+        uDecay: {
+          value: 0.94
+        },
+        uStride: {
+          value: 1.0
+        }
+      },
+      vertexShader: vs,
+      fragmentShader: `
+        uniform sampler2D tDiffuse; uniform vec2 uSun;
+        uniform float uDensity, uDecay, uStride; varying vec2 vUv;
+        const int N = 14;
+        void main(){
+          vec2 dlt = (vUv - uSun) * (uDensity / float(N)) * uStride;
+          vec2 uv = vUv; float w = 1.0; vec3 acc = vec3(0.0); float sum = 0.0;
+          for(int i=0;i<N;i++){
+            acc += texture2D(tDiffuse, uv).rgb * w;
+            sum += w; uv -= dlt; w *= uDecay;
+          }
+          gl_FragColor = vec4(acc/max(sum,0.0001), 1.0);
+        }`
+    });
+    this.comp = new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: {
+          value: null
+        },
+        tRays: {
+          value: null
+        },
+        uStrength: {
+          value: 0.9
+        },
+        uTint: {
+          value: new THREE.Color(1, 0.72, 0.42)
+        }
+      },
+      vertexShader: vs,
+      fragmentShader: `
+        uniform sampler2D tDiffuse, tRays; uniform float uStrength; uniform vec3 uTint;
+        varying vec2 vUv;
+        void main(){
+          vec3 base = texture2D(tDiffuse, vUv).rgb;
+          vec3 rays = texture2D(tRays,    vUv).rgb;
+          gl_FragColor = vec4(base + rays*uTint*uStrength, 1.0);
+        }`
+    });
+    this.fsq = new FullScreenQuad(this.prep);
+  }
+  setSize(w, h) {
+    this.rtA.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2));
+    this.rtB.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2));
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    if (this.comp.uniforms.uStrength.value < 0.004) {
+
+      this.fsq.material = this.comp;
+      this.comp.uniforms.tDiffuse.value = readBuffer.texture;
+      this.comp.uniforms.tRays.value = this.rtA.texture;
+    } else {
+      this.prep.uniforms.tDiffuse.value = readBuffer.texture;
+      this.fsq.material = this.prep;
+      renderer.setRenderTarget(this.rtA);
+      renderer.clear();
+      this.fsq.render(renderer);
+
+      this.fsq.material = this.blur;
+      this.blur.uniforms.tDiffuse.value = this.rtA.texture;
+      this.blur.uniforms.uStride.value = 1.0;
+      renderer.setRenderTarget(this.rtB);
+      renderer.clear();
+      this.fsq.render(renderer);
+
+      this.blur.uniforms.tDiffuse.value = this.rtB.texture;
+      this.blur.uniforms.uStride.value = 14.0;
+      renderer.setRenderTarget(this.rtA);
+      renderer.clear();
+      this.fsq.render(renderer);
+
+      this.comp.uniforms.tDiffuse.value = readBuffer.texture;
+      this.comp.uniforms.tRays.value = this.rtA.texture;
+      this.fsq.material = this.comp;
+    }
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    if (this.clear) renderer.clear();
+    this.fsq.render(renderer);
+  }
+}
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
