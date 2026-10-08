@@ -5724,6 +5724,115 @@ const compositePass = new ShaderPass(CompositeShader);
 
 composer.addPass(compositePass);
 
+const AUD = {
+  ctx: null,
+  ready: false
+};
+
+function initAudio() {}
+
+function thumpSound() {}
+
+function updateAudio() {}
+
+function createMusicPlaylist(audio, tracks, button) {
+  let current = 0;
+  audio.volume = .35;
+  audio.preload = 'auto';
+  const start = () => {
+    if (!audio.src) audio.src = tracks[current];
+    audio.play().catch(() => {});
+  };
+  audio.addEventListener('ended', () => {
+    current = (current + 1) % tracks.length;
+    audio.src = tracks[current];
+    start();
+  });
+  button.addEventListener('click', event => {
+    event.stopPropagation();
+    audio.muted = !audio.muted;
+    button.textContent = audio.muted ? 'MUSIC OFF' : 'MUSIC ON';
+    button.setAttribute('aria-pressed', String(audio.muted));
+  });
+  return {
+    start
+  };
+}
+
+let started = false;
+
+const startEl = document.getElementById('start');
+
+const hudEl = document.getElementById('flash');
+
+const SPAWN_LOCK = 1.0;
+
+function beginGame() {
+  if (started) return;
+  started = true;
+  musicPlayer.start();
+  initAudio();
+  if (AUD.ctx && AUD.ctx.state === 'suspended') AUD.ctx.resume();
+
+  car.vLong = 0;
+  car.vLat = 0;
+  car.omega = 0;
+  car.ax = 0;
+  car.steer = 0;
+  car.steerVis = 0;
+  car.slip = 0;
+  car.screech = 0;
+  car.landImpact = 0;
+  input.th = 0;
+  input.br = 0;
+  input.st = 0;
+  input.hb = 0;
+  input.bo = false;
+  settleSuspension();
+  placeCar();
+  camSnap();
+  spawnLock = SPAWN_LOCK;
+  startEl.classList.add('hide');
+  document.getElementById('hud').classList.add('on');
+  setTimeout(() => {
+    startEl.style.display = 'none';
+  }, 1400);
+}
+
+function readInput(dt) {
+  if (autoDrive) {
+    autopilot();
+    return;
+  }
+  if (spawnLock > 0) {
+    spawnLock -= dt;
+    input.th = 0;
+    input.br = 0;
+    input.st = 0;
+    input.hb = 0;
+    input.bo = false;
+    return;
+  }
+  const K = KEYS_DOWN;
+  const up = K['KeyW'] || K['ArrowUp'];
+  const down = K['KeyS'] || K['ArrowDown'];
+  const left = K['KeyA'] || K['ArrowLeft'];
+  const right = K['KeyD'] || K['ArrowRight'];
+  input.th = damp(input.th, up ? 1 : 0, 9, dt);
+  input.br = damp(input.br, down ? 1 : 0, 13, dt);
+
+  const stT = (left ? 1 : 0) + (right ? -1 : 0);
+
+  const rate = stT === 0 ? 12.0 :
+    stT * input.st < -0.02 ? 15.0 :
+    6.0 - Math.min(Math.abs(car.vLong) * 0.125, 4.0);
+  input.st = damp(input.st, stT, rate, dt);
+  input.hb = K['Space'] ? 1 : 0;
+  const bo = !!(K['ShiftLeft'] || K['ShiftRight']);
+  if (bo && !input.bo && car.boost > 0.05) boostWhoosh();
+  input.bo = bo;
+}
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
