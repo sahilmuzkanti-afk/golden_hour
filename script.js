@@ -5833,6 +5833,128 @@ function readInput(dt) {
   input.bo = bo;
 }
 
+function autopilot() {
+  const spd = Math.abs(car.vLong);
+
+  const L = clamp(spd * 0.90 + 11 + Math.abs(car.n) * 0.95, 13, 72);
+
+  let err = Math.atan2(-car.n, L) - car.yaw;
+  err = Math.atan2(Math.sin(err), Math.cos(err));
+  const yawRoad = car.omega - curvatureAt(car.s) * car.vLong;
+
+  const ppA = Math.atan2(2 * WB * Math.sin(err), L) * (WB + KUS * spd * spd) / WB;
+  const ffA = steerForCurve(curvatureAt(car.s + spd * 0.55), spd);
+  const dampA = -yawRoad * 0.42 * (WB + KUS * spd * spd) / Math.max(spd, 8);
+  input.st = clamp((ppA + ffA + dampA) / steerCapAt(spd), -1, 1);
+
+  const scan = clamp(spd * spd / 16 + 40, 60, 420);
+  let over = -99;
+  for (let i = 1; i <= 14; i++) {
+    const ds = scan * i / 14;
+    const kk = Math.abs(curvatureAt(car.s + ds));
+
+    const vC = clamp(Math.sqrt(5.5 / Math.max(kk, 1e-5)), 14, 44);
+
+    over = Math.max(over, spd - Math.sqrt(vC * vC + 2 * 5.5 * ds));
+  }
+
+  input.th = clamp(-over * 0.24, 0, 1) * clamp(1 - Math.abs(err) * 1.1, 0.25, 1);
+  input.br = clamp(over * 0.45, 0, 0.9);
+
+  const lost = smooth(8, 20, Math.abs(car.n));
+  if (lost > 0.01) {
+    input.st = clamp(input.st + err * 1.1 * lost, -1, 1);
+    input.br = Math.max(input.br, lost * 0.45 * smooth(14, 30, spd));
+    input.th = Math.max(0.30, Math.min(input.th, 1 - lost * 0.45));
+  }
+
+  const gone = smooth(0.42, 0.95, Math.abs(car.slipR));
+  if (gone > 0.01) input.st = clamp(input.st * (1 - gone) - Math.sign(car.omega) * gone * 0.55, -1, 1);
+  input.hb = 0;
+  input.bo = false;
+}
+
+const kb = {
+  t: 0,
+  st: 0,
+  th: 0,
+  br: 0
+};
+
+function keyboardAI(dt) {
+  kb.t -= dt;
+  if (kb.t <= 0) {
+    kb.t = 0.09;
+    const spd = Math.abs(car.vLong);
+    const L = clamp(spd * 0.9 + 12 + Math.abs(car.n) * 0.9, 14, 68);
+    let err = Math.atan2(-car.n, L) - car.yaw;
+    err = Math.atan2(Math.sin(err), Math.cos(err));
+    const yawRoad = car.omega - curvatureAt(car.s) * car.vLong;
+    const want = (Math.atan2(2 * WB * Math.sin(err), L) * (WB + KUS * spd * spd) / WB +
+      steerForCurve(curvatureAt(car.s + spd * 0.6), spd) -
+      yawRoad * 0.40 * (WB + KUS * spd * spd) / Math.max(spd, 8)) / steerCapAt(spd);
+    kb.st = Math.abs(want) < 0.12 ? 0 : Math.sign(want);
+    let over = -99;
+    const scan = clamp(spd * spd / 16 + 40, 60, 400);
+    for (let i = 1; i <= 10; i++) {
+      const ds = scan * i / 10;
+      const kk = Math.abs(curvatureAt(car.s + ds));
+      const vC = clamp(Math.sqrt(5.5 / Math.max(kk, 1e-5)), 12, 44);
+      over = Math.max(over, spd - Math.sqrt(vC * vC + 2 * 5.5 * ds));
+    }
+    kb.th = over < -1.5 ? 1 : 0;
+    kb.br = over > 1.0 ? 1 : 0;
+  }
+  KEYS_DOWN['KeyA'] = kb.st < 0;
+  KEYS_DOWN['KeyD'] = kb.st > 0;
+  KEYS_DOWN['KeyW'] = !!kb.th;
+  KEYS_DOWN['KeyS'] = !!kb.br;
+}
+
+let flashV = 0;
+
+function doRestart() {
+  flashV = 1;
+
+  pathReset();
+  for (const [ci, ch] of roadChunks) {
+    disposeGroup(ch.grp);
+    roadChunks.delete(ci);
+  }
+  for (const [k, m] of tiles) {
+    if (m !== 'pending') {
+      m.geometry.dispose();
+      m.removeFromParent();
+    }
+    tiles.delete(k);
+  }
+  buildQueue.length = 0;
+  scatterQueue.length = 0;
+  scatterReset();
+  resetCar();
+
+  updateWorld();
+  drainQueue(600, 12);
+  lodCheck(carRoot.position.x, carRoot.position.z);
+  if (scatterDirty) scatterFlush();
+  placeCar();
+  camSnap();
+  for (let i = 0; i < PN; i++) pLife[i] = 0;
+}
+
+const elSpeed = document.getElementById('speed');
+
+const elDist = document.getElementById('dist');
+
+const elBoost = document.getElementById('boostFill');
+
+const elTod = document.getElementById('tod');
+
+const elFlash = document.getElementById('flash');
+
+let hudAcc = 0,
+  shownSpeed = 0;
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
