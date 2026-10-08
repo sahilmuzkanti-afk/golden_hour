@@ -5955,6 +5955,126 @@ const elFlash = document.getElementById('flash');
 let hudAcc = 0,
   shownSpeed = 0;
 
+function updateHUD(dt) {
+  shownSpeed = damp(shownSpeed, Math.abs(car.vLong) * 3.6, 12, dt);
+  hudAcc += dt;
+  if (hudAcc > 0.05) {
+    hudAcc = 0;
+    elSpeed.textContent = Math.round(shownSpeed);
+    elDist.textContent = (car.dist / 1000).toFixed(2);
+    elTod.textContent = SKYST.name;
+  }
+  elBoost.style.transform = `scaleX(${car.boost})`;
+  elBoost.style.opacity = car.boost < 0.16 ? 0.35 : 1;
+}
+
+function updateWorld() {
+  pathExtendTo(car.s + RD.ahead);
+  pathTrimTo(car.s - RD.behind);
+  if (car.s + RD.ahead > gridBuiltTo - 200 || car.s - RD.behind < gridBuiltFrom - 10) gridRebuild();
+
+  const ci0 = chunkIndexOf(car.s - 300);
+  const ci1 = chunkIndexOf(car.s + 1150);
+  for (let ci = ci0; ci <= ci1; ci++) {
+    if (!roadChunks.has(ci)) roadChunks.set(ci, makeRoadChunk(ci));
+  }
+  for (const [ci, ch] of roadChunks) {
+    if (ci < ci0 - 1 || ci > ci1 + 1) {
+      disposeGroup(ch.grp);
+      roadChunks.delete(ci);
+    }
+  }
+  const f = frameAt(car.s);
+  updateTiles(f.x, f.z);
+}
+
+let clock = 0,
+  last = performance.now();
+
+let fpsAcc = 0,
+  fpsN = 0,
+  fpsAvg = 60;
+
+let streamMs = 0,
+  streamPeak = 0;
+
+renderer.info.autoReset = false;
+
+let lastInfo = {
+  calls: 0,
+  triangles: 0
+};
+
+const probeRT = new THREE.WebGLRenderTarget(96, 54, {
+  type: THREE.HalfFloatType
+});
+
+function half2f(h) {
+  const s = (h & 0x8000) >> 15,
+    e = (h & 0x7C00) >> 10,
+    f = h & 0x03FF;
+  if (e === 0) return (s ? -1 : 1) * Math.pow(2, -14) * (f / 1024);
+  if (e === 31) return f ? NaN : (s ? -Infinity : Infinity);
+  return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
+}
+
+function probe() {
+  const prev = renderer.getRenderTarget();
+  renderer.setRenderTarget(probeRT);
+  renderer.render(scene, camera);
+  const buf = new Uint16Array(96 * 54 * 4);
+  renderer.readRenderTargetPixels(probeRT, 0, 0, 96, 54, buf);
+  renderer.setRenderTarget(prev);
+  const lum = [],
+    top = [],
+    bot = [];
+  for (let y = 0; y < 54; y++)
+    for (let x = 0; x < 96; x++) {
+      const i = (y * 96 + x) * 4;
+      const l = 0.2126 * half2f(buf[i]) + 0.7152 * half2f(buf[i + 1]) + 0.0722 * half2f(buf[i + 2]);
+      if (!isFinite(l)) continue;
+      lum.push(l);
+      (y > 27 ? top : bot).push(l);
+    }
+  lum.sort((a, b) => a - b);
+  const pc = p => +(lum[Math.floor(p * (lum.length - 1))] || 0).toFixed(3);
+  const avg = a => +(a.reduce((s, v) => s + v, 0) / Math.max(1, a.length)).toFixed(3);
+  return {
+    min: pc(0),
+    p25: pc(.25),
+    median: pc(.5),
+    p90: pc(.9),
+    p99: pc(.99),
+    max: +lum[lum.length - 1].toFixed(2),
+    skyAvg: avg(top),
+    groundAvg: avg(bot)
+  };
+}
+
+const _right = new THREE.Vector3();
+
+const _sunScreen = new THREE.Vector3();
+
+const DUSTCOL = new THREE.Color(0.55, 0.48, 0.38);
+
+const SPARKCOL = new THREE.Color(1.0, 0.55, 0.18);
+
+const GRITCOL = new THREE.Color(0.30, 0.30, 0.32);
+
+const SMOKECOL = new THREE.Color(0.46, 0.45, 0.46);
+
+const WHITE = new THREE.Color(1, 1, 1);
+
+const _exW = new THREE.Vector3();
+
+const RSCALE = [1.0, 0.86, 0.74, 0.62, 0.52];
+
+let rIdx = 0,
+  rHold = 0,
+  dprBase = Math.min(devicePixelRatio || 1, DPR_CAP);
+
+if ((location.hash || '').toLowerCase().includes('dpr1')) dprBase = 1;
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
@@ -6001,7 +6121,6 @@ const milestoneCameraPosition = new THREE.Vector3();
 let milestoneStarted = false;
 let milestoneLast = performance.now();
 let milestoneAccumulator = 0;
-let clock = 0;
 
 function beginMilestone() {
   if (milestoneStarted) return;
