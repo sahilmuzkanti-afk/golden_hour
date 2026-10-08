@@ -6075,6 +6075,130 @@ let rIdx = 0,
 
 if ((location.hash || '').toLowerCase().includes('dpr1')) dprBase = 1;
 
+function applyRenderScale() {
+
+  const [w, h] = bufferSize(dprBase * RSCALE[rIdx]);
+  renderer.setPixelRatio(1);
+  renderer.setSize(w, h, false);
+  composer.setPixelRatio(1);
+  composer.setSize(w, h);
+  godRays.setSize(w, h);
+
+  const bs = QTIERS[qIdx].bloom;
+  bloom.resolution.set(Math.max(64, Math.round(w * bs)), Math.max(64, Math.round(h * bs)));
+}
+
+const QTIERS = [{
+    name: 'high',
+    near: 165,
+    grass: 1,
+    rock: 1,
+    mesh: 1.00,
+    rad: [3, 3, 3],
+    shadow: 3072,
+    rays: true,
+    bloom: 1.00
+  },
+  {
+    name: 'medium',
+    near: 130,
+    grass: 2,
+    rock: 1,
+    mesh: 0.80,
+    rad: [3, 3, 2],
+    shadow: 2048,
+    rays: true,
+    bloom: 0.70
+  },
+  {
+    name: 'low',
+    near: 95,
+    grass: 3,
+    rock: 2,
+    mesh: 0.66,
+    rad: [2, 2, 2],
+    shadow: 1024,
+    rays: false,
+    bloom: 0.50
+  },
+  {
+    name: 'potato',
+    near: 62,
+    grass: 5,
+    rock: 3,
+    mesh: 0.52,
+    rad: [2, 2, 2],
+    shadow: 1024,
+    rays: false,
+    bloom: 0.40
+  },
+];
+
+const PERF = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [2, 1],
+  [2, 2],
+  [3, 2],
+  [3, 3],
+  [4, 3]
+];
+
+let perfIdx = 0,
+  qIdx = 0;
+
+function applyTier() {
+  const q = QTIERS[qIdx];
+  LOD_NEAR = q.near;
+  grassStride = q.grass;
+  rockStride = q.rock;
+  if (sunLight.shadow.mapSize.x !== q.shadow) {
+    sunLight.shadow.mapSize.set(q.shadow, q.shadow);
+    if (sunLight.shadow.map) {
+      sunLight.shadow.map.dispose();
+      sunLight.shadow.map = null;
+    }
+  }
+  godRays.enabled = q.rays && !SAFE.nopost;
+
+  let reseg = false;
+  RINGS.forEach((R, i) => {
+
+    const s = i === 0 ? R.seg0 : Math.max(6, Math.round(R.seg0 * q.mesh / 2) * 2);
+    if (s !== R.seg) {
+      R.seg = s;
+      reseg = true;
+    }
+
+    if (q.rad[i] !== R.rad) {
+      R.rad = q.rad[i];
+      reseg = true;
+    }
+  });
+  if (reseg) retile();
+  scatterDirty = true;
+}
+
+function retile() {
+  const f = frameAt(car.s);
+  for (const [key, m] of tiles) {
+    if (m === 'pending') continue;
+    const r = m.userData.ring;
+    if (m.userData.seg === RINGS[r].seg) continue;
+    buildQueue.push({
+      r,
+      tx: m.userData.tx,
+      tz: m.userData.tz,
+      key,
+      replace: true,
+      d: Math.hypot((m.userData.tx + 0.5) * RINGS[r].size - f.x,
+        (m.userData.tz + 0.5) * RINGS[r].size - f.z)
+    });
+  }
+  updateTiles(f.x, f.z);
+}
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
