@@ -6951,6 +6951,65 @@ window.__game = {
   cockpit,
   DIAL,
   wheelSpin,
+  canopyAt,
+  IM,
+  setPerf,
+  QTIERS,
+  get tier() {
+      return QTIERS[qIdx].name;
+    },
+  get streamPeak() {
+      return streamPeak;
+    },
+  resetPeak: () => {
+      streamPeak = 0;
+    },
+  streamTick: () => {
+      const t0 = performance.now();
+      updateWorld();
+      const t1 = performance.now();
+      drainQueue(1, 1);
+      const t2 = performance.now();
+      lodCheck(carRoot.position.x, carRoot.position.z);
+      const flushed = scatterDirty;
+      if (scatterDirty) scatterFlush();
+      const t3 = performance.now();
+      return {
+        total: t3 - t0,
+        world: t1 - t0,
+        build: t2 - t1,
+        flush: t3 - t2,
+        flushed,
+        q: buildQueue.length,
+        sq: scatterQueue.length
+      };
+    },
+  counts: () => {
+      const o = {
+        tris: 0,
+        calls: 0,
+        by: {}
+      };
+      scene.traverseVisible(ob => {
+        const g = ob.geometry;
+        if (!g || !ob.isMesh && !ob.isPoints && !ob.isLine) return;
+        const n = ob.isInstancedMesh ? ob.count : 1;
+        if (n === 0) return;
+        const t = ((g.index ? g.index.count : g.attributes.position.count) / 3 | 0) * n;
+        o.tris += t;
+        o.calls++;
+        const k = ob.name || (ob.isInstancedMesh ? 'inst' : 'mesh');
+        o.by[k] = (o.by[k] || 0) + t;
+      });
+      for (const k in IM) o[k] = IM[k].count;
+      o.carParts = 0;
+      carRoot.traverseVisible(ob => {
+        if (ob.isMesh) o.carParts++;
+      });
+      o.tiles = tiles.size;
+      o.roadChunks = roadChunks.size;
+      return o;
+    },
 };
 
 const milestoneCarPosition = _carPos;
