@@ -7012,6 +7012,12 @@ window.__game = {
     },
 };
 
+const musicPlayer = createMusicPlaylist(
+  new Audio(),
+  ['./We Are The People.mp3', './Blinding Lights.mp3'],
+  document.getElementById('musicToggle')
+);
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {

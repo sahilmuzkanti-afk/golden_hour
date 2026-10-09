@@ -171,6 +171,35 @@
     transition: opacity .12s ease
   }
 
+  #musicToggle {
+    position: absolute;
+    top: clamp(20px, 4vh, 44px);
+    right: clamp(20px, 3.2vw, 50px);
+    border: 1px solid rgba(255, 255, 255, .25);
+    border-radius: 2px;
+    padding: 8px 11px;
+    background: rgba(7, 9, 13, .28);
+    color: var(--ink);
+    font: 500 10px var(--fnt);
+    letter-spacing: .22em;
+    cursor: pointer;
+    pointer-events: auto;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, .6);
+  }
+
+  #musicToggle:hover {
+    border-color: rgba(255, 255, 255, .55);
+    background: rgba(7, 9, 13, .48)
+  }
+
+  #musicToggle[aria-pressed="true"] {
+    color: var(--dim)
+  }
+
+  #hud:not(.on) #musicToggle {
+    pointer-events: none
+  }
+
 
   #start {
     position: fixed;
