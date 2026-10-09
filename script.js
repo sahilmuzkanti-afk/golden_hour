@@ -6693,6 +6693,136 @@ function placeCar() {
   return f;
 }
 
+function warp(sec, throttle) {
+  const dt = 1 / 60,
+    n = Math.min(Math.round(sec / dt), 6000);
+  const th = throttle === undefined ? 1 : throttle;
+  for (let i = 0; i < n; i++) {
+    autopilot();
+    if (th !== 1) input.th = Math.min(input.th, th);
+    stepPhysics(dt);
+    clock += dt;
+    if (i % 8 === 0) {
+      updateWorld();
+      drainQueue(8);
+    }
+    placeCar();
+    updateCamera(dt);
+  }
+  updateWorld();
+  drainQueue(600);
+  lodCheck(carRoot.position.x, carRoot.position.z);
+  if (scatterDirty) scatterFlush();
+  applySky(0, camera.position);
+  bakeEnv();
+}
+
+function simulate(plan, sampleHz, hz) {
+  const rate = hz || 60;
+  const dt = 1 / rate,
+    every = Math.max(1, Math.round(rate / (sampleHz || 20)));
+  const prevAuto = autoDrive;
+  autoDrive = false;
+  const out = [];
+  let i = 0;
+  for (const seg of plan) {
+    for (const k in KEYS_DOWN) delete KEYS_DOWN[k];
+    for (const k of (seg.keys || [])) KEYS_DOWN[k] = true;
+    const n = Math.round(seg.sec / dt);
+    for (let j = 0; j < n; j++, i++) {
+      if (seg.kb) keyboardAI(dt);
+      readInput(dt);
+      if (seg.autoSteer) {
+
+        const th = input.th,
+          br = input.br,
+          hb = input.hb,
+          bo = input.bo,
+          man = input.st;
+        autopilot();
+        if (!seg.autoPedal) {
+          input.th = th;
+          input.br = br;
+        }
+        input.hb = hb;
+        input.bo = bo;
+        input.st = clamp(input.st + man, -1, 1);
+      }
+      stepPhysics(dt);
+      clock += dt;
+      if (i % 8 === 0) {
+        updateWorld();
+        drainQueue(6);
+      }
+      placeCar();
+      updateCamera(dt);
+      if (camHook) camHook();
+      if (i % every === 0) out.push({
+        t: +(i * dt).toFixed(3),
+        tag: seg.tag || '',
+        kmh: +(Math.hypot(car.vLong, car.vLat) * 3.6).toFixed(1),
+        slip: +(car.slipR * 57.3).toFixed(2),
+        yawRate: +car.omega.toFixed(3),
+        roll: +car.roll.toFixed(3),
+        pitch: +car.pitch.toFixed(3),
+        air: car.air ? 1 : 0,
+        y: +car.y.toFixed(2),
+        ext: +(car.ext || 0).toFixed(3),
+        vy: +car.vy.toFixed(2),
+        off: +car.n.toFixed(2),
+        boost: +car.boost.toFixed(2),
+        s: Math.round(car.s),
+        k: +(curvatureAt(car.s) * 1000).toFixed(2),
+        st: +car.steer.toFixed(3),
+        fov: +camera.fov.toFixed(2),
+        camD: +Math.hypot(camera.position.x - carRoot.position.x,
+          camera.position.z - carRoot.position.z).toFixed(2),
+        camY: +(camera.position.y - carRoot.position.y).toFixed(2),
+      });
+    }
+  }
+  for (const k in KEYS_DOWN) delete KEYS_DOWN[k];
+  autoDrive = prevAuto;
+  updateWorld();
+  drainQueue(600);
+  lodCheck(carRoot.position.x, carRoot.position.z);
+  if (scatterDirty) scatterFlush();
+  return out;
+}
+
+const RD1PX = new Uint8Array(4);
+
+window.__game = {
+  car,
+  SKYST,
+  get fps() {
+      return fpsAvg;
+    },
+  renderer,
+  scene,
+  camera,
+  warp,
+  simulate,
+  setDay: v => {
+      dayT = v;
+    },
+  get dayT() {
+      return dayT;
+    },
+  begin: beginGame,
+  input,
+  KEYS_DOWN,
+  bloom,
+  godRays,
+  composer,
+  compositePass,
+  sky,
+  THREE,
+  frameAt,
+  terrainHeight,
+  roadMat,
+};
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
