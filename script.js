@@ -6821,6 +6821,136 @@ window.__game = {
   frameAt,
   terrainHeight,
   roadMat,
+  paintMat,
+  setPerf,
+  get renderScale() {
+      return dprBase * RSCALE[rIdx];
+    },
+  surfaceAt,
+  sampleWheels,
+  get spawnLock() {
+      return spawnLock;
+    },
+  carRoot,
+  CAMS,
+  setInterp: v => {
+      interpOn = v;
+    },
+  setStepHook: fn => {
+      stepHook = fn;
+    },
+  setCamHook: fn => {
+      camHook = fn;
+    },
+  setKnee: v => {
+      HILITE_KNEE.value = v;
+    },
+  get knee() {
+      return HILITE_KNEE.value;
+    },
+  bodyTop,
+  bodyX,
+  carBody,
+  cockpit,
+  tailMat,
+  tailRunMat,
+  framing,
+  get dustLive() {
+      let n = 0;
+      for (let i = 0; i < PN; i++)
+        if (pLife[i] > 0) n++;
+      return n;
+    },
+  steerCapAt,
+  steerForCurve,
+  curvatureAt,
+  KUS,
+  WB,
+  info: () => lastInfo,
+  probe,
+  setAuto: v => {
+      autoDrive = v;
+    },
+  camSnap,
+  placeCar,
+  settleSuspension,
+  resetCar,
+  stepPhysics,
+  PHYS_HZ,
+  get fpsCap() {
+      return fpsCap;
+    },
+  setCap: hz => {
+      fpsCap = hz;
+      paceCount = 0;
+    },
+  get rendered() {
+      return renderedFrames;
+    },
+  pacerTrial: (hz, refresh, seconds) => {
+      const keep = [fpsCap, lastRAF, paceCount, vsPeriod, vsMin, vsCount, vsWindow];
+      fpsCap = hz;
+      lastRAF = 0;
+      paceCount = 0;
+      vsPeriod = 0;
+      vsMin = 1e9;
+      vsCount = 0;
+      vsWindow = 20;
+      const step = 1000 / refresh,
+        total = Math.round(refresh * seconds);
+      const hits = [];
+      for (let i = 1; i <= total; i++)
+        if (framePaceOK(i * step)) hits.push(i * step);
+  
+      const gaps = [];
+      for (let i = Math.max(1, (hits.length * 0.25) | 0); i < hits.length; i++) gaps.push(hits[i] - hits[i - 1]);
+      [fpsCap, lastRAF, paceCount, vsPeriod, vsMin, vsCount, vsWindow] = keep;
+      return {
+        fps: hits.length / seconds,
+        gapMin: gaps.length ? Math.min(...gaps) : 0,
+        gapMax: gaps.length ? Math.max(...gaps) : 0
+      };
+    },
+  restart: doRestart,
+  clearFlash: () => {
+      flashV = 0;
+    },
+  bakeEnv,
+  setPaused: v => {
+      paused = !!v;
+      last = performance.now();
+      lastRAF = 0;
+      physAcc = 0;
+    },
+  renderOnce: (sceneOnly) => {
+  
+      applyCamLock();
+      if (sceneOnly) {
+        renderer.setRenderTarget(null);
+        renderer.render(scene, camera);
+      } else composer.render();
+  
+      const gl = renderer.getContext();
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, RD1PX);
+    },
+  lockCam: v => {
+      camLock = v;
+    },
+  carBody,
+  carRoot,
+  wheelHub,
+  CAMS,
+  setCam: i => {
+      camMode = i;
+      cam.init = false;
+      setCockpitVisible(CAMS[i].id === 'pit');
+    },
+  get camMode() {
+      return camMode;
+    },
+  cockpit,
+  DIAL,
+  wheelSpin,
 };
 
 const milestoneCarPosition = _carPos;
