@@ -6569,6 +6569,128 @@ function frameBody(now) {
   popRenderPose();
   const spd = Math.abs(car.vLong);
   const spinDust = car.wheelslip * smooth(0.06, 0.34, input.th);
+  if (spd > 4 || spinDust > 0.12) {
+      const emitN = Math.round((Math.max(car.screech * 2.4, spinDust * 3.4) +
+        car.offroad * 2.6) * 60 * dt);
+      const cy = Math.cos(car.yaw),
+        sy = Math.sin(car.yaw);
+      const hw = f.h + car.yaw;
+      for (let i = 0; i < emitN; i++) {
+        const side = i % 2 ? 1 : -1;
+  
+        const lx = side * 0.885 + (Math.random() - 0.5) * 0.16,
+          lz = -1.52 + (Math.random() - 0.5) * 0.22;
+        const dsW = lz * cy - lx * sy,
+          dnW = lz * sy + lx * cy;
+        roadToWorld(car.s + dsW, car.n + dnW, _right);
+  
+        const c = car.offroad > 0.4 ? DUSTCOL :
+          (spinDust > car.screech * 0.9 ? SMOKECOL : GRITCOL);
+  
+        const kick = spinDust * 5.0;
+        emit(_right.x, _right.y + 0.1, _right.z,
+          (Math.random() - 0.5) * 3.2 - Math.sin(hw) * (spd * 0.10 + kick),
+          0.7 + Math.random() * 1.5 + spinDust * 0.8,
+          (Math.random() - 0.5) * 3.2 - Math.cos(hw) * (spd * 0.10 + kick),
+          0.34 + Math.random() * 0.5 + spinDust * 0.30, 1.1 + Math.random() * 0.9, c);
+      }
+    }
+  if (car.boostAmt > 0.35 && Math.random() < dt * 46) {
+      for (const ep of exhaustPos) {
+        const wp = carBody.localToWorld(_exW.copy(ep));
+        emit(wp.x, wp.y, wp.z,
+          (Math.random() - 0.5) * 2 - Math.sin(f.h + car.yaw) * 6,
+          Math.random() * 1.4,
+          (Math.random() - 0.5) * 2 - Math.cos(f.h + car.yaw) * 6,
+          0.13, 0.42, SPARKCOL);
+      }
+    }
+  stepParticles(dt);
+  if (car.screech > 0.22 && spd > 6 && !car.air) {
+      const cy = Math.cos(car.yaw),
+        sy = Math.sin(car.yaw);
+      for (let w = 0; w < 2; w++) {
+        const lx = (w ? 1 : -1) * 0.885,
+          lz = -1.52;
+        const dsW = lz * cy - lx * sy,
+          dnW = lz * sy + lx * cy;
+        roadToWorld(car.s + dsW, car.n + dnW, _carPos);
+        const fw = frameAt(car.s + dsW);
+        _right.set(Math.cos(fw.h + car.yaw), 0, -Math.sin(fw.h + car.yaw));
+        trailPush(w, _carPos, _right, clamp(car.screech, 0, 1) * 0.9);
+      }
+    }
+  trailFade(dt);
+  if (leafMat.userData.sh) {
+      const lu = leafMat.userData.sh.uniforms;
+      lu.uSunDir.value.copy(lightDir);
+      lu.uSunCol.value.copy(SKYST.sun).multiplyScalar(SKYST.sunI * 0.055);
+    }
+  if (leafMat.userData.sh) leafMat.userData.sh.uniforms.uTime.value = clock;
+  if (grassMat.userData.sh) grassMat.userData.sh.uniforms.uTime.value = clock;
+  starMat.uniforms.uTime.value = clock;
+  starMat.uniforms.uPx.value = renderer.domElement.height / 900;
+  const spdN = clamp(spd / 72, 0, 1);
+  bloom.strength = SKYST.bloom * lerp(1.0, 0.62, SKYST.night) + car.boostAmt * 0.18;
+  bloom.radius = 0.48 + car.boostAmt * 0.14;
+  bloom.threshold = lerp(3.30, 1.15, SKYST.night);
+  _sunScreen.copy(sunDir).multiplyScalar(9000).add(camera.position);
+  _sunScreen.project(camera);
+  const sunOnScreen = _sunScreen.z < 1;
+  const sx = (_sunScreen.x * 0.5 + 0.5),
+      sy2 = (_sunScreen.y * 0.5 + 0.5);
+  const offEdge = Math.max(Math.abs(sx - 0.5), Math.abs(sy2 - 0.5));
+  const vis = sunOnScreen ? clamp(1 - smooth(0.5, 1.15, offEdge), 0, 1) : 0;
+  godRays.prep.uniforms.uSun.value.set(sx, sy2);
+  godRays.blur.uniforms.uSun.value.set(sx, sy2);
+  godRays.comp.uniforms.uStrength.value = SKYST.rayS * vis * 0.95;
+  godRays.comp.uniforms.uTint.value.copy(SKYST.sun).lerp(WHITE, 0.25);
+  const cu = compositePass.uniforms;
+  cu.uTime.value = clock;
+  cu.uRes.value.set(innerWidth, innerHeight);
+  cu.uBlur.value = (Math.pow(spdN, 2.3) * 0.019 + car.boostAmt * 0.030);
+  cu.uCA.value = 0.0013 + spdN * 0.0022 + car.boostAmt * 0.0026;
+  cu.uLines.value = car.boostAmt * clamp(spdN * 1.5, 0, 1);
+  cu.uGrain.value = 0.022 + SKYST.night * 0.020;
+  cu.uVign.value = 0.55 + spdN * 0.13 + car.boostAmt * 0.10;
+  cu.uSat.value = 1.11 + SKYST.night * 0.04;
+  const gt = SKYST.grade,
+      tint = 0.30;
+  cu.uGain.value.set(lerp(1, gt.r, tint), lerp(1, gt.g, tint), lerp(1, gt.b, tint));
+  const cool = 0.26 * (1 - SKYST.night * 0.55);
+  cu.uShad.value.set(lerp(1, 0.78, cool), lerp(1, 0.88, cool), lerp(1, 1.10, cool));
+  flashV = Math.max(0, flashV - dt * 1.8);
+  cu.uFlash.value = flashV * 0.85;
+  updateAudio(dt);
+  updateHUD(dt);
+  if (car.landImpact > 0.25) {
+      thumpSound(car.landImpact);
+      car.landImpact = 0;
+    }
+  if (SAFE.nopost) {
+      renderer.setRenderTarget(null);
+      renderer.render(scene, camera);
+    } else composer.render();
+  frameMs += (performance.now() - t0 - frameMs) * 0.1;
+  if (DBG.el) dbgTick(dt);
+  lastInfo = {
+      calls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      geometries: renderer.info.memory.geometries,
+      textures: renderer.info.memory.textures,
+      programs: renderer.info.programs ? renderer.info.programs.length : -1
+    };
+}
+
+function placeCar() {
+  const f = frameAt(car.s);
+  roadToWorld(car.s, car.n, _carPos);
+  carRoot.position.set(_carPos.x, car.y, _carPos.z);
+  carRoot.rotation.set(0, f.h + car.yaw, 0);
+
+  carBody.rotation.set(car.pitch, 0, car.roll + Math.atan(f.b) * Math.cos(car.yaw));
+  carBody.position.y = 0;
+  return f;
 }
 
 const milestoneCarPosition = _carPos;
