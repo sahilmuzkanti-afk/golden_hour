@@ -6326,6 +6326,135 @@ if (HASH.includes('debug')) dbgOpen();
 
 let diedAt = null;
 
+function reportFatal(err) {
+  if (diedAt) return;
+  diedAt = err;
+  console.error('[nightdrive] fatal', err);
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:auto 0 0 0;z-index:99;max-height:46vh;overflow:auto;' +
+    'background:#140507ee;color:#ffb4b4;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
+    'padding:14px 18px;white-space:pre-wrap;border-top:2px solid #ff4d4d';
+  const gl = renderer.getContext();
+  d.textContent = '⚠ render loop stopped\n\n' + (err && err.stack || err) +
+    '\n\nGPU: ' + (function() {
+      try {
+        const e = gl.getExtension('WEBGL_debug_renderer_info');
+        return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      } catch (_) {
+        return '?';
+      }
+    })() +
+    '\ncontextLost: ' + gl.isContextLost() + '   glError: ' + gl.getError() +
+    '\nsize: ' + innerWidth + 'x' + innerHeight + ' dpr' + (devicePixelRatio || 1);
+  document.body.appendChild(d);
+}
+
+let ctxLost = false;
+
+const ctxToast = document.createElement('div');
+
+ctxToast.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:98;' +
+  'display:none;background:#0a0d14e8;color:#cfe0ff;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;' +
+  'padding:16px 22px;border-radius:10px;border:1px solid #2b3a55;text-align:center';
+
+ctxToast.textContent = 'graphics context reset — restoring…';
+
+document.body.appendChild(ctxToast);
+
+renderer.domElement.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  ctxLost = true;
+  ctxToast.style.display = 'block';
+  console.warn('[nightdrive] WebGL context lost — waiting for restore');
+});
+
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  ctxLost = false;
+  ctxToast.style.display = 'none';
+
+  if (rIdx < RSCALE.length - 1) rIdx++;
+  applyRenderScale();
+  envTimer = 99;
+  console.warn('[nightdrive] WebGL context restored at scale', RSCALE[rIdx]);
+});
+
+const FPSCAPS = [60, 120, 0];
+
+let fpsCap = 60,
+  renderedFrames = 0;
+
+for (const c of FPSCAPS)
+  if (c && HASH.includes('fps' + c)) fpsCap = c;
+
+if (HASH.includes('uncapped')) fpsCap = 0;
+
+let lastRAF = 0,
+  paceCount = 0;
+
+let vsPeriod = 0,
+  vsMin = 1e9,
+  vsCount = 0,
+  vsWindow = 20;
+
+function capLabel() {
+  return fpsCap ? fpsCap + ' fps' : 'uncapped';
+}
+
+function framePaceOK(now) {
+  const d = lastRAF ? now - lastRAF : 0;
+  lastRAF = now;
+  if (d > 1 && d < 40) {
+    if (d < vsMin) vsMin = d;
+    if (++vsCount >= vsWindow) {
+      vsPeriod = vsMin;
+      vsMin = 1e9;
+      vsCount = 0;
+      vsWindow = 120;
+    }
+  }
+  if (!fpsCap || !vsPeriod) return true;
+  const stride = Math.max(1, Math.round(1000 / (fpsCap * vsPeriod)));
+  if (++paceCount < stride) return false;
+  paceCount = 0;
+  return true;
+}
+
+let paused = false;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (diedAt || paused) return;
+  if (ctxLost) {
+    last = now;
+    lastRAF = now;
+    return;
+  }
+  if (!framePaceOK(now)) return;
+  try {
+    frameBody(now);
+  } catch (err) {
+    reportFatal(err);
+  }
+}
+
+const PHYS_HZ = 120,
+  PHYS_DT = 1 / PHYS_HZ;
+
+let physAcc = 0,
+  frameMs = 8;
+
+let prevS = 0,
+  prevN = 0,
+  prevY = 0,
+  prevYaw = 0,
+  havePrev = false;
+
+let poseHeld = false,
+  holdS = 0,
+  holdN = 0,
+  holdY = 0,
+  holdYaw = 0;
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
