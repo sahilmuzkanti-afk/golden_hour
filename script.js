@@ -6067,6 +6067,17 @@ const WHITE = new THREE.Color(1, 1, 1);
 
 const _exW = new THREE.Vector3();
 
+pathReset();
+gridRebuild();
+resetCar();
+updateWorld();
+drainQueue(300);
+lodCheck(carRoot.position.x, carRoot.position.z);
+scatterFlush();
+evalSky(dayT);
+applySky(0, camera.position);
+bakeEnv();
+
 const RSCALE = [1.0, 0.86, 0.74, 0.62, 0.52];
 
 let rIdx = 0,
@@ -6270,6 +6281,9 @@ function guessTier() {
 }
 
 const startTier = perfLock >= 0 ? perfLock : guessTier();
+
+if (startTier >= 2) renderer.shadowMap.type = THREE.PCFShadowMap;
+setPerf(Math.max(0, PERF.findIndex(p => p[1] === startTier)));
 
 const DBG = {
   el: null,
@@ -7147,59 +7161,52 @@ function updateMilestoneHud() {
   milestoneBoost.style.transform = 'scaleX(' + car.boost + ')';
 }
 
-addEventListener('keydown', event => {
-  milestoneKeys[event.code] = true;
-  beginMilestone();
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
-    event.preventDefault();
+addEventListener('keydown', e => {
+  KEYS_DOWN[e.code] = true;
+  if (e.code === 'F3') {
+    dbgOpen();
+    e.preventDefault();
+    return;
   }
+  if (!started) {
+    beginGame();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === 'KeyR') doRestart();
+  if (e.code === 'KeyC') {
+    camMode = (camMode + 1) % CAMS.length;
+    cam.init = false;
+    setCockpitVisible(CAMS[camMode].id === 'pit');
+    camFlash();
+  }
+  if (e.code === 'KeyV') {
+    fpsCap = FPSCAPS[(FPSCAPS.indexOf(fpsCap) + 1) % FPSCAPS.length];
+    paceCount = 0;
+    toast(capLabel());
+  }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
 
-addEventListener('keyup', event => {
-  milestoneKeys[event.code] = false;
+addEventListener('keyup', e => {
+  KEYS_DOWN[e.code] = false;
 });
 
-addEventListener('pointerdown', beginMilestone);
+addEventListener('pointerdown', () => {
+  if (!started) beginGame();
+});
+
 addEventListener('blur', () => {
-  for (const code in milestoneKeys) milestoneKeys[code] = false;
+  for (const k in KEYS_DOWN) KEYS_DOWN[k] = false;
 });
-
-function milestoneFrame(now) {
-  requestAnimationFrame(milestoneFrame);
-  const dt = Math.min((now - milestoneLast) / 1000, 0.05);
-  milestoneLast = now;
-  if (milestoneStarted) {
-    readMilestoneInput(dt);
-    milestoneAccumulator += dt;
-    while (milestoneAccumulator >= 1 / 120) {
-      stepPhysics(1 / 120);
-      milestoneAccumulator -= 1 / 120;
-    }
-    clock += dt;
-    updateMilestoneWorld();
-    drainQueue(5, 2);
-  }
-  const frame = placeMilestoneCar();
-  for (const wh of wheelHub) {
-    wh.spin.rotation.x = car.wheelSpin * (wh.r === WHEEL.fr ? WHEEL.rr / WHEEL.fr : 1);
-    if (wh.steer) wh.pivot.rotation.y = car.steer * 0.92;
-  }
-  updateCamera(dt);
-  applySky(dt, camera.position);
-  updateMilestoneHud();
-  renderer.render(scene, camera);
-}
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(...bufferSize(Math.min(devicePixelRatio || 1, DPR_CAP)), false);
+  dprBase = Math.min(devicePixelRatio || 1, DPR_CAP);
+  if ((location.hash || '').toLowerCase().includes('dpr1')) dprBase = 1;
+  applyRenderScale();
 });
 
-pathReset();
-updateMilestoneWorld();
-drainQueue(600, 12);
-settleSuspension();
-placeMilestoneCar();
-camSnap();
-requestAnimationFrame(milestoneFrame);
+applyRenderScale();
+requestAnimationFrame(frame);
