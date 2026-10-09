@@ -6199,6 +6199,133 @@ function retile() {
   updateTiles(f.x, f.z);
 }
 
+function setPerf(i) {
+  perfIdx = clamp(i, 0, PERF.length - 1);
+  const [r, q] = PERF[perfIdx];
+  const qChanged = (q !== qIdx),
+    rChanged = (r !== rIdx);
+  rIdx = r;
+  qIdx = q;
+
+  if (rChanged || qChanged || i === 0) applyRenderScale();
+  if (qChanged || i === 0) applyTier();
+}
+
+let perfFloor = 0;
+
+function adaptQuality() {
+  if (perfLock >= 0) return;
+  rHold -= 0.5;
+  if (rHold > 0) return;
+  const cap = fpsCap || 60;
+  if (fpsAvg < cap * 0.80 && perfIdx < PERF.length - 1) {
+
+    const r = fpsAvg / cap;
+    const steps = r > 0.56 ? 1 : r > 0.33 ? 2 : 3;
+    setPerf(perfIdx + steps);
+    rHold = started ? 2.5 : 1;
+    perfFloor = perfIdx;
+  } else if (clock > 2.5 && fpsAvg > cap * 0.96 && frameMs < 9) {
+    if (perfIdx > perfFloor) {
+      setPerf(perfIdx - 1);
+      rHold = 4;
+    } else if (perfFloor > 0) {
+      perfFloor--;
+      rHold = 12;
+    }
+  }
+}
+
+const HASH = (location.hash || '').toLowerCase();
+
+const SAFE = {
+  nopost: HASH.includes('nopost'),
+  noshadow: HASH.includes('noshadow'),
+  dpr1: HASH.includes('dpr1')
+};
+
+if (SAFE.noshadow) renderer.shadowMap.enabled = false;
+
+let perfLock = -1;
+
+for (let i = 0; i < QTIERS.length; i++)
+  if (HASH.includes(QTIERS[i].name)) perfLock = i;
+
+function guessTier() {
+  let s = '';
+  try {
+    const gl = renderer.getContext();
+    const e = gl.getExtension('WEBGL_debug_renderer_info');
+    s = String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  } catch (_) {}
+  s = s.toLowerCase();
+  if (/swiftshader|llvmpipe|software|basic render/.test(s)) return 3;
+  const cores = navigator.hardwareConcurrency || 4;
+  const mem = navigator.deviceMemory || 4;
+
+  if (/(intel).*(hd|uhd) graphics|gma|mesa intel/.test(s)) return cores >= 8 ? 2 : 3;
+  if (cores <= 4 || mem <= 4) return 3;
+
+  return 1;
+}
+
+const startTier = perfLock >= 0 ? perfLock : guessTier();
+
+const DBG = {
+  el: null,
+  acc: 0,
+  v2: new THREE.Vector2(),
+  v4: new THREE.Vector4()
+};
+
+function dbgTick(dt) {
+  DBG.acc += dt;
+  if (DBG.acc < 0.25) return;
+  DBG.acc = 0;
+  const gl = renderer.getContext();
+  const dz = renderer.getDrawingBufferSize(DBG.v2);
+  const vp = renderer.getViewport(DBG.v4);
+  const c = renderer.domElement;
+  let gpu = '?';
+  try {
+    const e = gl.getExtension('WEBGL_debug_renderer_info');
+    gpu = e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  } catch (_) {}
+  DBG.el.textContent =
+    `fps ${fpsAvg.toFixed(0)}   cap ${capLabel()}   ` +
+    `panel ${vsPeriod?(1000/vsPeriod).toFixed(0):'?'}Hz` +
+    `${fpsCap&&vsPeriod?' every '+Math.max(1,Math.round(1000/(fpsCap*vsPeriod)))+' vsync':''}\n` +
+    `${QTIERS[qIdx].name}${perfLock>=0?' (pinned)':''} @${RSCALE[rIdx]}   ` +
+    `cpu ${frameMs.toFixed(1)}ms   calls ${renderer.info.render.calls}   ` +
+    `tris ${(renderer.info.render.triangles/1000|0)}k   stream ${streamMs.toFixed(1)}ms\n` +
+    `inner ${innerWidth}x${innerHeight}   dpr ${(devicePixelRatio||1).toFixed(2)}   scale ${(dprBase*RSCALE[rIdx]).toFixed(3)}\n` +
+    `canvas.attr ${c.width}x${c.height}   canvas.css ${c.clientWidth}x${c.clientHeight}\n` +
+    `drawBuffer ${dz.x}x${dz.y}   gl.drawingBuffer ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}\n` +
+    `viewport ${vp.x},${vp.y} ${vp.z}x${vp.w}\n` +
+    `composerRT ${composer.renderTarget1.width}x${composer.renderTarget1.height} samples ${composer.renderTarget1.samples}` +
+    ((composer.renderTarget1.width % 1) || (composer.renderTarget1.height % 1) ? '  ⚠FRACTIONAL' : '') +
+
+    ((composer.renderTarget1.width !== gl.drawingBufferWidth ||
+      composer.renderTarget1.height !== gl.drawingBufferHeight) ? '  ⚠MISMATCH vs drawBuffer' : '') + '\n' +
+    `godRayRT ${godRays.rtA.width}x${godRays.rtA.height}   post ${SAFE.nopost?'OFF':'on'}  shadows ${renderer.shadowMap.enabled?'on':'OFF'}\n` +
+    `glError ${gl.getError()}   ctxLost ${gl.isContextLost()}\n` +
+    `webgl2 ${renderer.capabilities.isWebGL2}   maxTex ${renderer.capabilities.maxTextureSize}   ${gpu}`;
+}
+
+function dbgOpen() {
+  if (DBG.el) return;
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:10px;top:10px;z-index:80;background:#000c;color:#8ef;' +
+    'font:11px/1.45 ui-monospace,Consolas,monospace;padding:9px 12px;white-space:pre;' +
+    'border:1px solid #2a4;border-radius:4px;pointer-events:none';
+  document.body.appendChild(d);
+  DBG.el = d;
+}
+
+if (HASH.includes('debug')) dbgOpen();
+
+let diedAt = null;
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
