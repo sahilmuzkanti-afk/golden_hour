@@ -6455,6 +6455,122 @@ let poseHeld = false,
   holdY = 0,
   holdYaw = 0;
 
+let interpOn = true;
+
+function pushRenderPose(alpha) {
+  if (!havePrev || poseHeld || !interpOn) return;
+  poseHeld = true;
+  holdS = car.s;
+  holdN = car.n;
+  holdY = car.y;
+  holdYaw = car.yaw;
+
+  const dYaw = Math.atan2(Math.sin(holdYaw - prevYaw), Math.cos(holdYaw - prevYaw));
+  car.s = prevS + (holdS - prevS) * alpha;
+  car.n = prevN + (holdN - prevN) * alpha;
+  car.y = prevY + (holdY - prevY) * alpha;
+  car.yaw = prevYaw + dYaw * alpha;
+}
+
+function popRenderPose() {
+  if (!poseHeld) return;
+  poseHeld = false;
+  car.s = holdS;
+  car.n = holdN;
+  car.y = holdY;
+  car.yaw = holdYaw;
+}
+
+function frameBody(now) {
+  const t0 = performance.now();
+  renderedFrames++;
+  const rawDt = (now - last) / 1000;
+  last = now;
+  let dt = rawDt > 0.06 ? 0.06 : rawDt;
+  if (dt <= 0) return;
+  clock += dt;
+  renderer.info.reset();
+  fpsAcc += rawDt;
+  fpsN++;
+  if (fpsAcc > 0.5) {
+      fpsAvg = fpsN / fpsAcc;
+      fpsAcc = 0;
+      fpsN = 0;
+      adaptQuality();
+    }
+  if (started) dayT = (dayT + dt / CYCLE) % 1;
+  physAcc += dt;
+  let steps = 0;
+  while (physAcc >= PHYS_DT && steps < 10) {
+      prevS = car.s;
+      prevN = car.n;
+      prevY = car.y;
+      prevYaw = car.yaw;
+      if (started) readInput(PHYS_DT);
+      stepPhysics(PHYS_DT);
+      physAcc -= PHYS_DT;
+      steps++;
+    }
+  if (steps === 10) physAcc = 0;
+  if (steps) havePrev = true;
+  const _t0 = performance.now();
+  updateWorld();
+  drainQueue(started ? 1 : 12, started ? 1 : 12);
+  lodCheck(carRoot.position.x, carRoot.position.z);
+  if (scatterDirty) scatterFlush();
+  streamMs = performance.now() - _t0;
+  if (streamMs > streamPeak) streamPeak = streamMs;
+  pushRenderPose(clamp(physAcc / PHYS_DT, 0, 1));
+  const f = placeCar();
+  for (let i = 0; i < wheelHub.length; i++) {
+      const wh = wheelHub[i];
+      wh.spin.rotation.x = car.wheelSpin * (wh.r === WHEEL.fr ? WHEEL.rr / WHEEL.fr : 1);
+      if (wh.steer) wh.pivot.rotation.y = car.steer * 0.92;
+    }
+  const night = clamp(SKYST.star * 1.25 + smooth(6, -1, SKYST.elev) * 0.5, 0, 1);
+  const headOn = clamp(night * 1.4, 0, 1);
+  headMat.emissiveIntensity = headOn * 2.2;
+  for (const s of beamLights) s.intensity = headOn * 118;
+  volMat.uniforms.uOp.value = headOn * 0.40;
+  for (const g of glowHead) g.material.opacity = headOn * 0.42;
+  const braking = clamp(input.br * 1.2 + (car.vLong > 2 && input.br > 0.05 ? 0.4 : 0), 0, 1);
+  tailMat.emissiveIntensity = 0.40 + braking * 4.2 + headOn * 0.85;
+  tailRunMat.emissiveIntensity = 0.34 + braking * 0.55 + headOn * 0.70;
+  reverseMat.emissiveIntensity = headOn * 0.55;
+  for (const g of glowTail) g.material.opacity = 0.06 + braking * 0.34 + headOn * 0.13;
+  const flameOn = car.boostAmt * (0.55 + 0.45 * Math.sin(clock * 47));
+  for (const fl of flames) {
+      fl.material.opacity = flameOn * 0.62;
+      fl.scale.set(1 + Math.sin(clock * 61) * 0.2, 0.7 + car.boostAmt * 0.9, 1 + Math.cos(clock * 53) * 0.2);
+    }
+  const lightDir = applySky(dt, camera.position);
+  {
+      const wy = frameAt(car.s).h + car.yaw;
+      const snap = 0.5,
+        ahead = 26;
+      const sx = _carPos.x + Math.sin(wy) * ahead,
+        sz = _carPos.z + Math.cos(wy) * ahead;
+      sunLight.target.position.set(sx, _carPos.y, sz);
+      sunLight.position.set(
+        Math.round((sx + lightDir.x * 180) / snap) * snap,
+        _carPos.y + lightDir.y * 180,
+        Math.round((sz + lightDir.z * 180) / snap) * snap);
+    }
+  sunLight.target.updateMatrixWorld();
+  envTimer += rawDt;
+  if (envTimer > 2.4) {
+      envTimer = 0;
+      bakeEnv();
+    }
+  updateCockpit(dt);
+  updateCamera(dt);
+  applyCamLock();
+  if (camHook) camHook();
+  popRenderPose();
+  const spd = Math.abs(car.vLong);
+  const spinDust = car.wheelslip * smooth(0.06, 0.34, input.th);
+}
+
 const milestoneCarPosition = _carPos;
 
 function placeMilestoneCar() {
