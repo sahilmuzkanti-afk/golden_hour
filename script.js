@@ -7034,35 +7034,9 @@ const musicPlayer = createMusicPlaylist(
 
 const milestoneCarPosition = _carPos;
 
-function placeMilestoneCar() {
-  const f = frameAt(car.s);
-  roadToWorld(car.s, car.n, milestoneCarPosition);
-  carRoot.position.set(milestoneCarPosition.x, car.y, milestoneCarPosition.z);
-  carRoot.rotation.set(0, f.h + car.yaw, 0);
-  carBody.rotation.set(car.pitch, 0, car.roll + Math.atan(f.b) * Math.cos(car.yaw));
-  return f;
-}
 
-function updateMilestoneWorld() {
-  pathExtendTo(car.s + RD.ahead);
-  pathTrimTo(car.s - RD.behind);
-  if (car.s + RD.ahead > gridBuiltTo - 200 || car.s - RD.behind < gridBuiltFrom - 10) {
-    gridRebuild();
-  }
-  const first = chunkIndexOf(car.s - 300);
-  const last = chunkIndexOf(car.s + 1150);
-  for (let index = first; index <= last; index++) {
-    if (!roadChunks.has(index)) roadChunks.set(index, makeRoadChunk(index));
-  }
-  for (const [index, chunk] of roadChunks) {
-    if (index < first - 1 || index > last + 1) {
-      disposeGroup(chunk.grp);
-      roadChunks.delete(index);
-    }
-  }
-  const f = frameAt(car.s);
-  updateTiles(f.x, f.z);
-}
+
+
 
 
 const milestoneKeys = KEYS_DOWN;
@@ -7079,87 +7053,13 @@ let milestoneStarted = false;
 let milestoneLast = performance.now();
 let milestoneAccumulator = 0;
 
-function beginMilestone() {
-  if (milestoneStarted) return;
-  milestoneStarted = true;
 
-  car.vLong = 0;
-  car.vLat = 0;
-  car.omega = 0;
-  car.ax = 0;
-  car.steer = 0;
-  car.steerVis = 0;
-  car.slip = 0;
-  car.screech = 0;
-  car.landImpact = 0;
-  input.th = 0;
-  input.br = 0;
-  input.st = 0;
-  input.hb = 0;
-  input.bo = false;
-  settleSuspension();
-  placeMilestoneCar();
-  camSnap();
-  spawnLock = 1.0;
-  milestoneStart.classList.add('hide');
-  document.getElementById('hud').classList.add('on');
-  setTimeout(() => {
-    milestoneStart.style.display = 'none';
-  }, 1400);
-}
 
-function readMilestoneInput(dt) {
-  if (autoDrive) {
-    autopilot();
-    return;
-  }
-  if (spawnLock > 0) {
-    spawnLock -= dt;
-    input.th = 0;
-    input.br = 0;
-    input.st = 0;
-    input.hb = 0;
-    input.bo = false;
-    return;
-  }
-  const K = KEYS_DOWN;
-  const up = K['KeyW'] || K['ArrowUp'];
-  const down = K['KeyS'] || K['ArrowDown'];
-  const left = K['KeyA'] || K['ArrowLeft'];
-  const right = K['KeyD'] || K['ArrowRight'];
-  input.th = damp(input.th, up ? 1 : 0, 9, dt);
-  input.br = damp(input.br, down ? 1 : 0, 13, dt);
 
-  const stT = (left ? 1 : 0) + (right ? -1 : 0);
 
-  const rate = stT === 0 ? 12.0 :
-    stT * input.st < -0.02 ? 15.0 :
-    6.0 - Math.min(Math.abs(car.vLong) * 0.125, 4.0);
-  input.st = damp(input.st, stT, rate, dt);
-  input.hb = K['Space'] ? 1 : 0;
-  const bo = !!(K['ShiftLeft'] || K['ShiftRight']);
-  if (bo && !input.bo && car.boost > 0.05) boostWhoosh();
-  input.bo = bo;
-}
 
-function updateMilestoneCamera(dt, frame) {
-  const yaw = frame.h + car.yaw;
-  const distance = 10 + clamp(Math.abs(car.vLong) / 25, 0, 3);
-  milestoneCameraPosition.set(
-    milestoneCarPosition.x - Math.sin(yaw) * distance,
-    car.y + 4.2,
-    milestoneCarPosition.z - Math.cos(yaw) * distance
-  );
-  camera.position.lerp(milestoneCameraPosition, clamp(dt * 5, 0, 1));
-  milestoneCameraTarget.set(milestoneCarPosition.x, car.y + 0.7, milestoneCarPosition.z);
-  camera.lookAt(milestoneCameraTarget);
-}
 
-function updateMilestoneHud() {
-  milestoneSpeed.textContent = Math.round(Math.abs(car.vLong) * 3.6);
-  milestoneDistance.textContent = (car.dist / 1000).toFixed(2);
-  milestoneBoost.style.transform = 'scaleX(' + car.boost + ')';
-}
+
 
 addEventListener('keydown', e => {
   KEYS_DOWN[e.code] = true;
