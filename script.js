@@ -4508,8 +4508,17 @@ function stepPhysics(dt) {
     hb = input.hb;
   const boostOn = input.bo && car.boost > 0.02 && car.vLong > 3;
   car.boosting = boostOn;
-  car.boost = clamp(car.boost + (boostOn ? -dt * 0.30 : dt * 0.135), 0, 1);
-  car.boostAmt = damp(car.boostAmt, boostOn ? 1 : 0, 7, dt);
+  car.boost = clamp(
+    car.boost + (boostOn ? -dt * 0.30 : dt * 0.135),
+    0,
+    1
+  );
+  car.boostAmt = damp(
+    car.boostAmt,
+    boostOn ? 1 : 0,
+    7,
+    dt
+  );
 
   const spd = Math.abs(car.vLong);
   const steerCap = steerCapAt(spd);
@@ -4521,15 +4530,25 @@ function stepPhysics(dt) {
   const L = CARP.lf + CARP.lr;
   const dir = Math.sign(car.vLong || 1);
 
-  const aF = Math.atan2(car.vLat + car.omega * CARP.lf, v) - car.steer * dir;
-  const aR = Math.atan2(car.vLat - car.omega * CARP.lr, v);
+  const aF = Math.atan2(
+    car.vLat + car.omega * CARP.lf,
+    v
+  ) - car.steer * dir;
+  const aR = Math.atan2(
+    car.vLat - car.omega * CARP.lr,
+    v
+  );
   car.slipR = aR;
   const W = CARP.m * GRAV;
 
 
 
 
-  const dFz = clamp(CARP.m * car.ax * CARP.hcg / L, -0.40 * W, 0.40 * W);
+  const dFz = clamp(
+    CARP.m * car.ax * CARP.hcg / L,
+    -0.40 * W,
+    0.40 * W
+  );
   const FzF = Math.max(700, W * CARP.lr / L - dFz);
   const FzR = Math.max(700, W * CARP.lf / L + dFz);
 
@@ -4549,7 +4568,10 @@ function stepPhysics(dt) {
 
 
   const boostMul = 1 + car.boostAmt * 0.47;
-  const tractive = Math.min(CARP.engine, CARP.power / Math.max(v, 8)) * boostMul;
+  const tractive = Math.min(
+    CARP.engine,
+    CARP.power / Math.max(v, 8)
+  ) * boostMul;
   const brakeF_ = br * CARP.brakeF;
   let fxF = -brakeF_ * CARP.brakeBias * dir;
 
@@ -4562,12 +4584,17 @@ function stepPhysics(dt) {
 
 
 
-  const tcs = 1 - clamp((Math.abs(aR) - 0.05) / 0.13, 0, 0.78) * (1 - hb);
+  const tcs = 1 - clamp(
+    (Math.abs(aR) - 0.05) / 0.13,
+    0,
+    0.78
+  ) * (1 - hb);
   car.tcs = tcs;
   let fxR = th * tractive * tcs - brakeF_ * (1 - CARP.brakeBias) * dir;
 
 
-  if (hb) fxR -= 2350 * (1 - th * 0.55) * dir;
+  if (hb)
+    fxR -= 2350 * (1 - th * 0.55) * dir;
 
 
 
@@ -4580,18 +4607,38 @@ function stepPhysics(dt) {
   fxF = clamp(fxF, -capF * 0.95, capF * 0.95);
   const rLim = capR * (fxR >= 0 ? 0.92 : 0.78);
   const fxRcl = clamp(fxR, -rLim, rLim);
-  car.wheelslip = damp(car.wheelslip, Math.min(1, Math.abs(fxR - fxRcl) / 2600), 9, dt);
+  car.wheelslip = damp(
+    car.wheelslip,
+    Math.min(1, Math.abs(fxR - fxRcl) / 2600),
+    9,
+    dt
+  );
   fxR = fxRcl;
 
-  const roomF = Math.sqrt(Math.max(0, 1 - (fxF / capF) * (fxF / capF)));
-  const roomR = Math.sqrt(Math.max(0, 1 - (fxR / capR) * (fxR / capR)));
-  const FyF = clamp(-CARP.Cf * aF, -capF * roomF, capF * roomF);
-  const FyR = clamp(-Cr * aR, -capR * roomR, capR * roomR);
+  const roomF = Math.sqrt(Math.max(
+    0,
+    1 - (fxF / capF) * (fxF / capF)
+  ));
+  const roomR = Math.sqrt(Math.max(
+    0,
+    1 - (fxR / capR) * (fxR / capR)
+  ));
+  const FyF = clamp(
+    -CARP.Cf * aF,
+    -capF * roomF,
+    capF * roomF
+  );
+  const FyR = clamp(
+    -Cr * aR,
+    -capR * roomR,
+    capR * roomR
+  );
 
   let Fx = fxF + fxR;
   Fx -= CARP.drag * car.vLong * Math.abs(car.vLong);
   Fx -= (CARP.roll + car.offroad * 120) * car.vLong;
-  if (car.air) Fx = lerp(Fx, -CARP.drag * car.vLong * Math.abs(car.vLong), car.airT || 0);
+  if (car.air)
+    Fx = lerp(Fx, -CARP.drag * car.vLong * Math.abs(car.vLong), car.airT || 0);
   car.ax = Fx / CARP.m;
 
   car.vLong += (car.ax + car.vLat * car.omega) * dt;
